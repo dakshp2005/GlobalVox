@@ -45,7 +45,7 @@ export async function GET(
   const [invitees, filteredCount] = await Promise.all([
     prisma.invitee.findMany({
       where,
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

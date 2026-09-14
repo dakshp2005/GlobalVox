@@ -505,7 +505,7 @@ export default function CampaignDetailPage() {
         <span>
           Showing {data.invitees.length} of {data.pagination.filteredCount}
         </span>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -513,6 +513,13 @@ export default function CampaignDetailPage() {
           >
             <ChevronLeft className="h-3.5 w-3.5" /> Prev
           </button>
+          <span className="tabular-nums">
+            Page {data.pagination.page} of{" "}
+            {Math.max(
+              1,
+              Math.ceil(data.pagination.filteredCount / data.pagination.pageSize)
+            )}
+          </span>
           <button
             disabled={
               page * data.pagination.pageSize >= data.pagination.filteredCount
