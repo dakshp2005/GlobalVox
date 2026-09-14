@@ -1,0 +1,85 @@
+// Prisma schema for the GlobalVox RSVP calling campaign manager.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum CampaignStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+}
+
+enum InviteeStatus {
+  PENDING       // imported, not yet called
+  IN_PROGRESS   // a call is currently being attempted
+  CONFIRMED     // will attend
+  DECLINED      // will not attend
+  UNDECIDED     // unsure / decide later
+  FAILED        // exhausted retries without a usable answer (no-answer, busy, provider error)
+  INVALID       // failed import validation (bad phone/email) - never called
+}
+
+enum CallOutcome {
+  CONFIRMED
+  DECLINED
+  UNDECIDED
+  NO_ANSWER
+  PROVIDER_ERROR
+}
+
+model Campaign {
+  id            String         @id @default(cuid())
+  eventName     String
+  eventDate     DateTime
+  eventLocation String
+  campaignName  String
+  status        CampaignStatus @default(DRAFT)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  invitees Invitee[]
+
+  @@map("campaigns")
+}
+
+model Invitee {
+  id            String        @id @default(cuid())
+  campaignId    String
+  campaign      Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  externalId    String?       // id from the imported CSV, if provided
+  name          String
+  phone         String
+  email         String?
+  status        InviteeStatus @default(PENDING)
+  attemptCount  Int           @default(0)
+  invalidReason String?       // set when status = INVALID
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  callAttempts CallAttempt[]
+
+  @@index([campaignId, status])
+  @@map("invitees")
+}
+
+model CallAttempt {
+  id              String       @id @default(cuid())
+  inviteeId       String
+  invitee         Invitee      @relation(fields: [inviteeId], references: [id], onDelete: Cascade)
+  attemptNumber   Int
+  startedAt       DateTime     @default(now())
+  endedAt         DateTime?
+  durationSeconds Int?
+  outcome         CallOutcome?
+  errorMessage    String?
+
+  @@index([inviteeId])
+  @@map("call_attempts")
+}

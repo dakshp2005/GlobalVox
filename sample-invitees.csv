@@ -1,0 +1,11 @@
+id,name,phone,email
+1,Rahul Sharma,+919876543210,rahul@example.com
+2,Priya Shah,+919812345678,priya@example.com
+3,Amit Patel,+919999999999,amit@example.com
+4,Sneha Verma,+919888877766,sneha@example.com
+5,Karan Mehta,not-a-phone,karan@example.com
+6,,+919111122223,noname@example.com
+7,Divya Nair,+919222233334,divya@example.com
+8,Rohan Gupta,+919333344445,not-an-email
+9,Ananya Iyer,+919444455556,ananya@example.com
+10,Vikram Rao,+919555566667,vikram@example.com
