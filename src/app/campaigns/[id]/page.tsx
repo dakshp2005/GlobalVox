@@ -83,33 +83,86 @@ export default function CampaignDetailPage() {
   const [showAddInvitees, setShowAddInvitees] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const prefetchCache = useRef<Map<string, CampaignDetail>>(new Map());
 
-  const load = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (statusFilter !== "ALL") params.set("status", statusFilter);
-    if (search) params.set("search", search);
-    params.set("page", String(page));
-    try {
-      const res = await fetch(`/api/campaigns/${id}?${params.toString()}`);
+  const buildParams = useCallback(
+    (p: number, sf: string, s: string) => {
+      const params = new URLSearchParams();
+      if (sf !== "ALL") params.set("status", sf);
+      if (s) params.set("search", s);
+      params.set("page", String(p));
+      return params;
+    },
+    []
+  );
+
+  const loadPage = useCallback(
+    async (pageNum: number, sf: string, s: string, signal?: AbortSignal) => {
+      const cached = prefetchCache.current.get(`${pageNum}-${sf}-${s}`);
+      if (cached) {
+        prefetchCache.current.delete(`${pageNum}-${sf}-${s}`);
+        return cached;
+      }
+      const params = buildParams(pageNum, sf, s);
+      const res = await fetch(`/api/campaigns/${id}?${params.toString()}`, { signal });
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
-      const json = await res.json();
-      setData(json);
-      setLoadError(null);
-      return json as CampaignDetail;
-    } catch {
-      setLoadError("Could not load this campaign.");
-    }
-  }, [id, statusFilter, search, page]);
+      return (await res.json()) as CampaignDetail;
+    },
+    [id, buildParams]
+  );
+
+  const prefetchPage = useCallback(
+    (pageNum: number, sf: string, s: string) => {
+      const key = `${pageNum}-${sf}-${s}`;
+      if (prefetchCache.current.has(key)) return;
+      const params = buildParams(pageNum, sf, s);
+      fetch(`/api/campaigns/${id}?${params.toString()}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (json) prefetchCache.current.set(key, json as CampaignDetail);
+        })
+        .catch(() => {});
+    },
+    [id, buildParams]
+  );
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on filter/page change
-    load();
-  }, [load]);
+    let cancelled = false;
+    const controller = new AbortController();
+    loadPage(page, statusFilter, search, controller.signal)
+      .then((json) => {
+        if (!cancelled && json) {
+          setData(json);
+          setLoadError(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Could not load this campaign.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [loadPage, page, statusFilter, search]);
+
+  useEffect(() => {
+    if (!data) return;
+    const totalPages = Math.ceil(data.pagination.filteredCount / data.pagination.pageSize);
+    if (page > 1) prefetchPage(page - 1, statusFilter, search);
+    if (page < totalPages) prefetchPage(page + 1, statusFilter, search);
+  }, [data, page, statusFilter, search, prefetchPage]);
 
   useEffect(() => {
     return () => {
       if (pollRef.current) clearTimeout(pollRef.current);
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
   }, []);
 
@@ -120,7 +173,8 @@ export default function CampaignDetailPage() {
         method: "POST",
       });
       const json = await res.json();
-      await load();
+      const fresh = await loadPage(page, statusFilter, search);
+      if (fresh) setData(fresh);
       if (!json.done) {
         pollRef.current = setTimeout(step, 400);
       } else {
@@ -132,7 +186,8 @@ export default function CampaignDetailPage() {
 
   async function handleStart() {
     await fetch(`/api/campaigns/${id}/start`, { method: "POST" });
-    await load();
+    const fresh = await loadPage(page, statusFilter, search);
+    if (fresh) setData(fresh);
     processBatchLoop();
   }
 
@@ -140,9 +195,12 @@ export default function CampaignDetailPage() {
     setRetrying(true);
     try {
       await fetch(`/api/campaigns/${id}/retry-failed`, { method: "POST" });
-      const fresh = await load();
-      if (fresh?.campaign.status === "RUNNING") {
-        processBatchLoop();
+      const fresh = await loadPage(page, statusFilter, search);
+      if (fresh) {
+        setData(fresh);
+        if (fresh.campaign.status === "RUNNING") {
+          processBatchLoop();
+        }
       }
     } finally {
       setRetrying(false);
@@ -288,9 +346,10 @@ export default function CampaignDetailPage() {
         <div className="mt-5">
           <EditCampaignForm
             campaign={campaign}
-            onSaved={() => {
+            onSaved={async () => {
               setShowEdit(false);
-              load();
+              const fresh = await loadPage(page, statusFilter, search);
+              if (fresh) setData(fresh);
             }}
             onCancel={() => setShowEdit(false)}
           />
@@ -301,9 +360,10 @@ export default function CampaignDetailPage() {
         <div className="mt-5">
           <AddInviteesPanel
             campaignId={id}
-            onDone={() => {
+            onDone={async () => {
               setShowAddInvitees(false);
-              load();
+              const fresh = await loadPage(page, statusFilter, search);
+              if (fresh) setData(fresh);
             }}
             onCancel={() => setShowAddInvitees(false)}
           />
@@ -380,6 +440,7 @@ export default function CampaignDetailPage() {
             <button
               key={s}
               onClick={() => {
+                setLoading(true);
                 setStatusFilter(s);
                 setPage(1);
               }}
@@ -396,10 +457,16 @@ export default function CampaignDetailPage() {
         <div className="relative sm:ml-auto sm:w-64">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
-            value={search}
+            value={searchInput}
             onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
+              const val = e.target.value;
+              setSearchInput(val);
+              if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+              setLoading(true);
+              searchTimerRef.current = setTimeout(() => {
+                setSearch(val);
+                setPage(1);
+              }, 300);
             }}
             placeholder="Search name, phone, email…"
             className="input pl-8"
@@ -409,7 +476,12 @@ export default function CampaignDetailPage() {
 
       <div className="mt-4">
         {/* Desktop table */}
-        <div className="hidden overflow-hidden rounded-xl border border-border bg-surface sm:block">
+        <div className="relative hidden overflow-hidden rounded-xl border border-border bg-surface sm:block">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
+              <Loader2 className="h-5 w-5 animate-spin text-accent" />
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
@@ -468,7 +540,13 @@ export default function CampaignDetailPage() {
         </div>
 
         {/* Mobile cards */}
-        <ul className="flex flex-col gap-2.5 sm:hidden">
+        <div className="relative sm:hidden">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60">
+              <Loader2 className="h-5 w-5 animate-spin text-accent" />
+            </div>
+          )}
+          <ul className="flex flex-col gap-2.5">
           {data.invitees.map((inv) => (
             <li key={inv.id}>
               <Link
@@ -499,16 +577,26 @@ export default function CampaignDetailPage() {
             </li>
           )}
         </ul>
+        </div>
       </div>
 
       <div className="mt-4 flex items-center justify-between text-xs text-muted">
         <span>
-          Showing {data.invitees.length} of {data.pagination.filteredCount}
+          {loading ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+            </span>
+          ) : (
+            <>Showing {data.invitees.length} of {data.pagination.filteredCount}</>
+          )}
         </span>
         <div className="flex items-center gap-2">
           <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || loading}
+            onClick={() => {
+              setLoading(true);
+              setPage((p) => Math.max(1, p - 1));
+            }}
             className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft className="h-3.5 w-3.5" /> Prev
@@ -522,9 +610,12 @@ export default function CampaignDetailPage() {
           </span>
           <button
             disabled={
-              page * data.pagination.pageSize >= data.pagination.filteredCount
+              page * data.pagination.pageSize >= data.pagination.filteredCount || loading
             }
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => {
+              setLoading(true);
+              setPage((p) => p + 1);
+            }}
             className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Next <ChevronRight className="h-3.5 w-3.5" />
