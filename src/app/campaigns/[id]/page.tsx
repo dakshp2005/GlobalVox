@@ -3,7 +3,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import {
+  ArrowLeft,
+  CalendarDays,
+  MapPin,
+  PhoneCall,
+  Search,
+  Users,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  Clock,
+  Loader2,
+  AlertTriangle,
+  Ban,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+} from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
+import ProgressBar from "@/components/ProgressBar";
 
 interface Invitee {
   id: string;
@@ -104,141 +123,235 @@ export default function CampaignDetailPage() {
 
   if (loadError) {
     return (
-      <div className="mx-auto max-w-5xl w-full px-6 py-10 flex-1">
-        <p className="text-sm text-red-600">{loadError}</p>
+      <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
+        <ErrorState message={loadError} />
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-5xl w-full px-6 py-10 flex-1">
-        <p className="text-zinc-500 text-sm">Loading…</p>
+      <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
+        <DetailSkeleton />
       </div>
     );
   }
 
   const { campaign, stats, total } = data;
   const pending = stats.PENDING ?? 0;
+  const inProgress = stats.IN_PROGRESS ?? 0;
   const canStart = campaign.status === "DRAFT" && total > 0;
 
   return (
-    <div className="mx-auto max-w-5xl w-full px-6 py-10 flex-1">
-      <Link href="/campaigns" className="text-sm text-zinc-500 hover:underline">
-        ← All campaigns
+    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      <Link
+        href="/campaigns"
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-accent"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> All campaigns
       </Link>
 
-      <div className="flex items-center justify-between mt-2 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {campaign.campaignName}
-          </h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            {campaign.eventName} · {campaign.eventLocation} ·{" "}
-            {new Date(campaign.eventDate).toLocaleDateString()}
-          </p>
+      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              {campaign.campaignName}
+            </h1>
+            <StatusBadge status={campaign.status} />
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+            <span className="font-medium text-slate-600">{campaign.eventName}</span>
+            <span className="inline-flex items-center gap-1">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {new Date(campaign.eventDate).toLocaleDateString(undefined, {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" />
+              {campaign.eventLocation}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <StatusBadge status={campaign.status} />
+
+        <div className="flex shrink-0 items-center gap-3">
           {canStart && (
             <button
               onClick={handleStart}
-              className="rounded-md bg-zinc-900 text-white px-4 py-2 text-sm font-medium hover:bg-zinc-700"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-strong"
             >
-              Start Campaign
+              <PhoneCall className="h-4 w-4" /> Start campaign
             </button>
           )}
           {campaign.status === "RUNNING" && pending > 0 && !running && (
             <button
               onClick={processBatchLoop}
-              className="rounded-md bg-zinc-900 text-white px-4 py-2 text-sm font-medium hover:bg-zinc-700"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-strong"
             >
-              Resume Calling
+              <PhoneCall className="h-4 w-4" /> Resume calling
             </button>
           )}
           {running && (
-            <span className="text-sm text-sky-700">Calling in progress…</span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3.5 py-2.5 text-sm font-medium text-sky-800">
+              <Loader2 className="h-4 w-4 animate-spin" /> Calling in progress…
+            </span>
           )}
         </div>
       </div>
 
-      <StatsGrid total={total} stats={stats} />
-
-      <div className="mt-8 flex items-center gap-3">
-        {STATUS_TABS.map((s) => (
-          <button
-            key={s}
-            onClick={() => {
-              setStatusFilter(s);
-              setPage(1);
-            }}
-            className={`text-xs px-3 py-1.5 rounded-full border ${
-              statusFilter === s
-                ? "bg-zinc-900 text-white border-zinc-900"
-                : "border-zinc-300 text-zinc-600 hover:border-zinc-500"
-            }`}
-          >
-            {s.replace("_", " ")}
-          </button>
-        ))}
-        <input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Search name, phone, email…"
-          className="ml-auto text-sm border border-zinc-300 rounded-md px-3 py-1.5"
+      <div className="mt-6">
+        <ProgressBar
+          segments={[
+            { value: stats.CONFIRMED ?? 0, color: "bg-emerald-500" },
+            { value: stats.DECLINED ?? 0, color: "bg-rose-500" },
+            { value: stats.UNDECIDED ?? 0, color: "bg-amber-400" },
+            { value: stats.IN_PROGRESS ?? 0, color: "bg-sky-400" },
+            { value: stats.FAILED ?? 0, color: "bg-red-400" },
+          ]}
         />
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-zinc-500 text-xs uppercase">
-            <tr>
-              <th className="text-left px-4 py-2">Name</th>
-              <th className="text-left px-4 py-2">Phone</th>
-              <th className="text-left px-4 py-2">Status</th>
-              <th className="text-left px-4 py-2">Attempts</th>
-              <th className="text-left px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {data.invitees.map((inv) => (
-              <tr key={inv.id} className="border-t border-zinc-100">
-                <td className="px-4 py-2">{inv.name}</td>
-                <td className="px-4 py-2 text-zinc-500">{inv.phone}</td>
-                <td className="px-4 py-2">
-                  <StatusBadge status={inv.status} />
-                  {inv.invalidReason && (
-                    <span className="ml-2 text-xs text-zinc-400">
-                      {inv.invalidReason}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-zinc-500">{inv.attemptCount}</td>
-                <td className="px-4 py-2 text-right">
-                  <Link
-                    href={`/campaigns/${id}/invitees/${inv.id}`}
-                    className="text-xs text-zinc-600 hover:underline"
-                  >
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {data.invitees.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-400">
-                  No invitees match this filter.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Total invitees" value={total} icon={<Users className="h-4 w-4" />} tone="slate" />
+        <StatCard label="Confirmed" value={stats.CONFIRMED ?? 0} icon={<CheckCircle2 className="h-4 w-4" />} tone="emerald" />
+        <StatCard label="Declined" value={stats.DECLINED ?? 0} icon={<XCircle className="h-4 w-4" />} tone="rose" />
+        <StatCard label="Undecided" value={stats.UNDECIDED ?? 0} icon={<HelpCircle className="h-4 w-4" />} tone="amber" />
+        <StatCard label="Pending" value={pending} icon={<Clock className="h-4 w-4" />} tone="slate" />
+        <StatCard label="In progress" value={inProgress} icon={<Loader2 className="h-4 w-4" />} tone="sky" />
+        <StatCard label="Failed" value={stats.FAILED ?? 0} icon={<AlertTriangle className="h-4 w-4" />} tone="red" />
+        <StatCard label="Invalid" value={stats.INVALID ?? 0} icon={<Ban className="h-4 w-4" />} tone="slate" faint />
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0">
+          {STATUS_TABS.map((s) => (
+            <button
+              key={s}
+              onClick={() => {
+                setStatusFilter(s);
+                setPage(1);
+              }}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                statusFilter === s
+                  ? "border-accent bg-accent text-white"
+                  : "border-border text-slate-600 hover:border-accent/40 hover:text-accent"
+              }`}
+            >
+              {s.replace("_", " ")}
+            </button>
+          ))}
+        </div>
+        <div className="relative sm:ml-auto sm:w-64">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search name, phone, email…"
+            className="input pl-8"
+          />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        {/* Desktop table */}
+        <div className="hidden overflow-hidden rounded-xl border border-border bg-surface sm:block">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-2.5 text-left">Name</th>
+                <th className="px-4 py-2.5 text-left">Phone</th>
+                <th className="px-4 py-2.5 text-left">Status</th>
+                <th className="px-4 py-2.5 text-left">Attempts</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.invitees.map((inv) => (
+                <tr
+                  key={inv.id}
+                  className="border-t border-border/70 transition-colors hover:bg-slate-50"
+                >
+                  <td className="px-4 py-2.5 font-medium text-foreground">
+                    {inv.name}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-500">{inv.phone}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={inv.status} size="sm" />
+                      {inv.invalidReason && (
+                        <span className="truncate text-xs text-slate-400">
+                          {inv.invalidReason}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-500">
+                    {inv.attemptCount}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <Link
+                      href={`/campaigns/${id}/invitees/${inv.id}`}
+                      className="text-xs font-semibold text-accent hover:text-accent-strong"
+                    >
+                      View →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {data.invitees.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-10 text-center text-sm text-muted"
+                  >
+                    No invitees match this filter.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile cards */}
+        <ul className="flex flex-col gap-2.5 sm:hidden">
+          {data.invitees.map((inv) => (
+            <li key={inv.id}>
+              <Link
+                href={`/campaigns/${id}/invitees/${inv.id}`}
+                className="block rounded-xl border border-border bg-surface p-3.5 active:bg-slate-50"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium text-foreground">
+                    {inv.name}
+                  </span>
+                  <StatusBadge status={inv.status} size="sm" />
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-muted">
+                  <span>{inv.phone}</span>
+                  <span>{inv.attemptCount} attempt(s)</span>
+                </div>
+                {inv.invalidReason && (
+                  <div className="mt-1 text-xs text-slate-400">
+                    {inv.invalidReason}
+                  </div>
+                )}
+              </Link>
+            </li>
+          ))}
+          {data.invitees.length === 0 && (
+            <li className="rounded-xl border border-dashed border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+              No invitees match this filter.
+            </li>
+          )}
+        </ul>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between text-xs text-muted">
         <span>
           Showing {data.invitees.length} of {data.pagination.filteredCount}
         </span>
@@ -246,18 +359,18 @@ export default function CampaignDetailPage() {
           <button
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-2 py-1 border rounded disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Prev
+            <ChevronLeft className="h-3.5 w-3.5" /> Prev
           </button>
           <button
             disabled={
               page * data.pagination.pageSize >= data.pagination.filteredCount
             }
             onClick={() => setPage((p) => p + 1)}
-            className="px-2 py-1 border rounded disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Next
+            Next <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -265,41 +378,69 @@ export default function CampaignDetailPage() {
   );
 }
 
-function StatsGrid({
-  total,
-  stats,
-}: {
-  total: number;
-  stats: Record<string, number>;
-}) {
-  const items = [
-    { label: "Total Invitees", value: total, color: "text-zinc-900" },
-    { label: "Confirmed", value: stats.CONFIRMED ?? 0, color: "text-emerald-700" },
-    { label: "Declined", value: stats.DECLINED ?? 0, color: "text-rose-700" },
-    { label: "Undecided", value: stats.UNDECIDED ?? 0, color: "text-amber-700" },
-    { label: "Pending", value: stats.PENDING ?? 0, color: "text-zinc-600" },
-    {
-      label: "In Progress",
-      value: stats.IN_PROGRESS ?? 0,
-      color: "text-sky-700",
-    },
-    { label: "Failed", value: stats.FAILED ?? 0, color: "text-red-700" },
-    { label: "Invalid", value: stats.INVALID ?? 0, color: "text-zinc-400" },
-  ];
+const TONE: Record<string, string> = {
+  slate: "text-slate-600 bg-slate-100",
+  emerald: "text-emerald-700 bg-emerald-50",
+  rose: "text-rose-700 bg-rose-50",
+  amber: "text-amber-700 bg-amber-50",
+  sky: "text-sky-700 bg-sky-50",
+  red: "text-red-700 bg-red-50",
+};
 
+function StatCard({
+  label,
+  value,
+  icon,
+  tone,
+  faint,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tone: keyof typeof TONE;
+  faint?: boolean;
+}) {
   return (
-    <div className="grid grid-cols-4 gap-3">
-      {items.map((it) => (
-        <div
-          key={it.label}
-          className="rounded-lg border border-zinc-200 bg-white p-4"
-        >
-          <div className={`text-2xl font-semibold ${it.color}`}>
-            {it.value.toLocaleString()}
-          </div>
-          <div className="text-xs text-zinc-500 mt-1">{it.label}</div>
-        </div>
-      ))}
+    <div
+      className={`rounded-xl border border-border bg-surface p-3.5 sm:p-4 ${
+        faint ? "opacity-70" : ""
+      }`}
+    >
+      <div
+        className={`mb-2 inline-flex h-7 w-7 items-center justify-center rounded-md ${TONE[tone]}`}
+      >
+        {icon}
+      </div>
+      <div className="text-xl font-bold text-foreground sm:text-2xl">
+        {value.toLocaleString()}
+      </div>
+      <div className="mt-0.5 text-[11px] font-medium text-muted sm:text-xs">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-800">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{message}</span>
+    </div>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div>
+      <div className="skeleton h-4 w-24 rounded" />
+      <div className="skeleton mt-4 h-7 w-72 rounded" />
+      <div className="skeleton mt-2 h-4 w-56 rounded" />
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="skeleton h-20 rounded-xl" />
+        ))}
+      </div>
     </div>
   );
 }

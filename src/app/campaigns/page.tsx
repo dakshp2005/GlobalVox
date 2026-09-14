@@ -2,7 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  CalendarDays,
+  MapPin,
+  Plus,
+  X,
+  UploadCloud,
+  FileCheck2,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  Clock,
+  AlertCircle,
+  ChevronRight,
+  Megaphone,
+} from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
+import ProgressBar from "@/components/ProgressBar";
 
 interface CampaignRow {
   id: string;
@@ -40,73 +56,195 @@ export default function CampaignsPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-5xl w-full px-6 py-10 flex-1">
-      <div className="flex items-center justify-between mb-8">
+    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            GlobalVox RSVP Campaigns
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent-strong">
+            <Megaphone className="h-3.5 w-3.5" />
+            RSVP calling campaigns
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Event campaigns
           </h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            Manage invitee lists, run AI-voice-agent RSVP calling campaigns, and
-            track results.
+          <p className="mt-1.5 max-w-lg text-sm text-muted">
+            Import an invitee list, launch an AI-voice-agent RSVP campaign, and
+            track confirmations in real time.
           </p>
         </div>
         <button
           onClick={() => setShowForm((s) => !s)}
-          className="rounded-md bg-zinc-900 text-white px-4 py-2 text-sm font-medium hover:bg-zinc-700"
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-strong active:scale-[0.98]"
         >
-          {showForm ? "Cancel" : "New Campaign"}
+          {showForm ? (
+            <>
+              <X className="h-4 w-4" /> Cancel
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" /> New campaign
+            </>
+          )}
         </button>
       </div>
 
       {showForm && (
-        <NewCampaignForm
-          onCreated={() => {
-            setShowForm(false);
-            load();
-          }}
-        />
+        <div className="mt-6">
+          <NewCampaignForm
+            onCreated={() => {
+              setShowForm(false);
+              load();
+            }}
+          />
+        </div>
       )}
 
-      {loadError ? (
-        <p className="text-sm text-red-600">{loadError}</p>
-      ) : campaigns === null ? (
-        <p className="text-zinc-500 text-sm">Loading…</p>
-      ) : campaigns.length === 0 ? (
-        <p className="text-zinc-500 text-sm">
-          No campaigns yet. Create one to get started.
-        </p>
-      ) : (
-        <ul className="space-y-3">
-          {campaigns.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/campaigns/${c.id}`}
-                className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{c.campaignName}</div>
-                    <div className="text-sm text-zinc-500">
-                      {c.eventName} · {c.eventLocation} ·{" "}
-                      {new Date(c.eventDate).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <StatusBadge status={c.status} />
-                </div>
-                <div className="mt-3 flex gap-4 text-xs text-zinc-600">
-                  <span>Total: {c.total}</span>
-                  <span>Confirmed: {c.stats.CONFIRMED ?? 0}</span>
-                  <span>Declined: {c.stats.DECLINED ?? 0}</span>
-                  <span>Undecided: {c.stats.UNDECIDED ?? 0}</span>
-                  <span>Pending: {c.stats.PENDING ?? 0}</span>
-                  <span>Failed: {c.stats.FAILED ?? 0}</span>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mt-8">
+        {loadError ? (
+          <ErrorState message={loadError} />
+        ) : campaigns === null ? (
+          <ListSkeleton />
+        ) : campaigns.length === 0 ? (
+          <EmptyState onCreate={() => setShowForm(true)} />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {campaigns.map((c) => (
+              <CampaignCard key={c.id} campaign={c} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CampaignCard({ campaign: c }: { campaign: CampaignRow }) {
+  const confirmed = c.stats.CONFIRMED ?? 0;
+  const declined = c.stats.DECLINED ?? 0;
+  const undecided = c.stats.UNDECIDED ?? 0;
+  const failed = c.stats.FAILED ?? 0;
+  const invalid = c.stats.INVALID ?? 0;
+  const resolved = confirmed + declined + undecided + failed + invalid;
+
+  return (
+    <li>
+      <Link
+        href={`/campaigns/${c.id}`}
+        className="group block rounded-xl border border-border bg-surface p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md sm:p-5"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate font-semibold text-foreground">
+                {c.campaignName}
+              </h2>
+              <StatusBadge status={c.status} size="sm" />
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3.5 w-3.5" />
+                {new Date(c.eventDate).toLocaleDateString(undefined, {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5" />
+                {c.eventLocation}
+              </span>
+            </div>
+          </div>
+          <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-accent sm:block" />
+        </div>
+
+        <div className="mt-4">
+          <ProgressBar
+            segments={[
+              { value: confirmed, color: "bg-emerald-500" },
+              { value: declined, color: "bg-rose-500" },
+              { value: undecided, color: "bg-amber-400" },
+              { value: failed, color: "bg-red-400" },
+            ]}
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
+          <StatChip icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />} label="Confirmed" value={confirmed} />
+          <StatChip icon={<XCircle className="h-3.5 w-3.5 text-rose-600" />} label="Declined" value={declined} />
+          <StatChip icon={<HelpCircle className="h-3.5 w-3.5 text-amber-600" />} label="Undecided" value={undecided} />
+          <StatChip icon={<Clock className="h-3.5 w-3.5 text-slate-500" />} label="Pending" value={c.total - resolved} />
+          <span className="ml-auto font-medium text-muted">
+            {c.total.toLocaleString()} invitee{c.total === 1 ? "" : "s"}
+          </span>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+function StatChip({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-slate-600">
+      {icon}
+      <span className="font-semibold text-foreground">{value}</span>
+      <span className="hidden sm:inline">{label}</span>
+    </span>
+  );
+}
+
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-strong">
+        <Megaphone className="h-6 w-6" />
+      </div>
+      <h3 className="text-base font-semibold text-foreground">
+        No campaigns yet
+      </h3>
+      <p className="max-w-xs text-sm text-muted">
+        Create your first RSVP campaign to start calling invitees and tracking
+        responses.
+      </p>
+      <button
+        onClick={onCreate}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-accent-strong"
+      >
+        <Plus className="h-4 w-4" /> New campaign
+      </button>
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-800">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{message}</span>
+    </div>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-border bg-surface p-5"
+        >
+          <div className="skeleton h-4 w-48 rounded" />
+          <div className="skeleton mt-2 h-3 w-64 rounded" />
+          <div className="skeleton mt-4 h-2 w-full rounded-full" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -117,6 +255,7 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
   const [eventLocation, setEventLocation] = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<{
@@ -166,10 +305,18 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-8 rounded-lg border border-zinc-200 bg-white p-5 space-y-4"
+      className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6"
     >
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Event Name">
+      <h2 className="text-sm font-semibold text-foreground">
+        Create a new campaign
+      </h2>
+      <p className="mt-1 text-xs text-muted">
+        Fill in the event details and upload your invitee list to get
+        started.
+      </p>
+
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Event name">
           <input
             required
             value={eventName}
@@ -178,7 +325,7 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
             placeholder="GlobalVox Annual Business Meet"
           />
         </Field>
-        <Field label="Campaign Name">
+        <Field label="Campaign name">
           <input
             required
             value={campaignName}
@@ -187,7 +334,7 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
             placeholder="Annual Business Meet — RSVP"
           />
         </Field>
-        <Field label="Event Date">
+        <Field label="Event date">
           <input
             required
             type="date"
@@ -196,7 +343,7 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
             className="input"
           />
         </Field>
-        <Field label="Event Location">
+        <Field label="Event location">
           <input
             required
             value={eventLocation}
@@ -207,19 +354,69 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
         </Field>
       </div>
 
-      <Field label="Invitee List (CSV: id,name,phone,email)">
-        <input
-          required
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-sm"
-        />
-      </Field>
+      <div className="mt-4">
+        <span className="mb-1.5 block text-xs font-medium text-slate-600">
+          Invitee list (CSV: id, name, phone, email)
+        </span>
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) setFile(f);
+          }}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
+            dragOver
+              ? "border-accent bg-accent-soft"
+              : file
+                ? "border-emerald-300 bg-emerald-50"
+                : "border-border bg-slate-50 hover:border-accent/50 hover:bg-accent-soft/50"
+          }`}
+        >
+          {file ? (
+            <>
+              <FileCheck2 className="h-6 w-6 text-emerald-600" />
+              <span className="text-sm font-medium text-emerald-800">
+                {file.name}
+              </span>
+              <span className="text-xs text-emerald-700/80">
+                Click to choose a different file
+              </span>
+            </>
+          ) : (
+            <>
+              <UploadCloud className="h-6 w-6 text-slate-400" />
+              <span className="text-sm font-medium text-slate-600">
+                Drag & drop your CSV, or click to browse
+              </span>
+              <span className="text-xs text-muted">
+                Header row required: id,name,phone,email
+              </span>
+            </>
+          )}
+          <input
+            required
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="sr-only"
+          />
+        </label>
+      </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-red-600">
+          <AlertCircle className="h-4 w-4" /> {error}
+        </p>
+      )}
       {summary && (
-        <p className="text-sm text-emerald-700">
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" />
           Imported {summary.valid} valid invitee(s), skipped {summary.invalid}{" "}
           invalid row(s) out of {summary.totalRows} total.
         </p>
@@ -228,20 +425,10 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
       <button
         type="submit"
         disabled={submitting}
-        className="rounded-md bg-zinc-900 text-white px-4 py-2 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50"
+        className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {submitting ? "Creating…" : "Create Campaign"}
+        {submitting ? "Creating…" : "Create campaign"}
       </button>
-
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border: 1px solid #d4d4d8;
-          border-radius: 0.375rem;
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-        }
-      `}</style>
     </form>
   );
 }
@@ -255,7 +442,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-zinc-600 mb-1">
+      <span className="mb-1.5 block text-xs font-medium text-slate-600">
         {label}
       </span>
       {children}
