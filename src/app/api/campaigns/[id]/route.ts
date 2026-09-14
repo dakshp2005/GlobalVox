@@ -60,3 +60,59 @@ export async function GET(
     pagination: { page, pageSize, filteredCount },
   });
 }
+
+export async function PATCH(
+  req: NextRequest,
+  ctx: RouteContext<"/api/campaigns/[id]">
+) {
+  const { id } = await ctx.params;
+
+  const campaign = await prisma.campaign.findUnique({ where: { id } });
+  if (!campaign) {
+    return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+  }
+
+  const body = await req.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { eventName, eventDate, eventLocation, campaignName } = body;
+  if (!eventName || !eventDate || !eventLocation || !campaignName) {
+    return NextResponse.json(
+      {
+        error:
+          "eventName, eventDate, eventLocation and campaignName are all required",
+      },
+      { status: 400 }
+    );
+  }
+
+  const parsedDate = new Date(eventDate);
+  if (isNaN(parsedDate.getTime())) {
+    return NextResponse.json({ error: "Invalid eventDate" }, { status: 400 });
+  }
+
+  const updated = await prisma.campaign.update({
+    where: { id },
+    data: { eventName, eventDate: parsedDate, eventLocation, campaignName },
+  });
+
+  return NextResponse.json({ campaign: updated });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  ctx: RouteContext<"/api/campaigns/[id]">
+) {
+  const { id } = await ctx.params;
+
+  const campaign = await prisma.campaign.findUnique({ where: { id } });
+  if (!campaign) {
+    return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+  }
+
+  await prisma.campaign.delete({ where: { id } });
+
+  return NextResponse.json({ ok: true });
+}

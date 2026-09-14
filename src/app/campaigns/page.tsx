@@ -7,8 +7,6 @@ import {
   MapPin,
   Plus,
   X,
-  UploadCloud,
-  FileCheck2,
   CheckCircle2,
   XCircle,
   HelpCircle,
@@ -19,6 +17,7 @@ import {
 } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import ProgressBar from "@/components/ProgressBar";
+import CsvDropzone from "@/components/CsvDropzone";
 
 interface CampaignRow {
   id: string;
@@ -255,7 +254,6 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
   const [eventLocation, setEventLocation] = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<{
@@ -355,58 +353,7 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
       </div>
 
       <div className="mt-4">
-        <span className="mb-1.5 block text-xs font-medium text-slate-600">
-          Invitee list (CSV: id, name, phone, email)
-        </span>
-        <label
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            const f = e.dataTransfer.files?.[0];
-            if (f) setFile(f);
-          }}
-          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
-            dragOver
-              ? "border-accent bg-accent-soft"
-              : file
-                ? "border-emerald-300 bg-emerald-50"
-                : "border-border bg-slate-50 hover:border-accent/50 hover:bg-accent-soft/50"
-          }`}
-        >
-          {file ? (
-            <>
-              <FileCheck2 className="h-6 w-6 text-emerald-600" />
-              <span className="text-sm font-medium text-emerald-800">
-                {file.name}
-              </span>
-              <span className="text-xs text-emerald-700/80">
-                Click to choose a different file
-              </span>
-            </>
-          ) : (
-            <>
-              <UploadCloud className="h-6 w-6 text-slate-400" />
-              <span className="text-sm font-medium text-slate-600">
-                Drag & drop your CSV, or click to browse
-              </span>
-              <span className="text-xs text-muted">
-                Header row required: id,name,phone,email
-              </span>
-            </>
-          )}
-          <input
-            required
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="sr-only"
-          />
-        </label>
+        <CsvDropzone file={file} onFileChange={setFile} />
       </div>
 
       {error && (

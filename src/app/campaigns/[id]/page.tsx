@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
@@ -20,9 +20,16 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  Download,
+  RefreshCcw,
+  UserPlus,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import ProgressBar from "@/components/ProgressBar";
+import CsvDropzone from "@/components/CsvDropzone";
 
 interface Invitee {
   id: string;
@@ -34,15 +41,17 @@ interface Invitee {
   invalidReason: string | null;
 }
 
+interface CampaignInfo {
+  id: string;
+  eventName: string;
+  eventDate: string;
+  eventLocation: string;
+  campaignName: string;
+  status: string;
+}
+
 interface CampaignDetail {
-  campaign: {
-    id: string;
-    eventName: string;
-    eventDate: string;
-    eventLocation: string;
-    campaignName: string;
-    status: string;
-  };
+  campaign: CampaignInfo;
   stats: Record<string, number>;
   total: number;
   invitees: Invitee[];
@@ -62,12 +71,18 @@ const STATUS_TABS = [
 
 export default function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [data, setData] = useState<CampaignDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [running, setRunning] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showAddInvitees, setShowAddInvitees] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -121,6 +136,29 @@ export default function CampaignDetailPage() {
     processBatchLoop();
   }
 
+  async function handleRetryFailed() {
+    setRetrying(true);
+    try {
+      await fetch(`/api/campaigns/${id}/retry-failed`, { method: "POST" });
+      const fresh = await load();
+      if (fresh?.campaign.status === "RUNNING") {
+        processBatchLoop();
+      }
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+      router.push("/campaigns");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loadError) {
     return (
       <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
@@ -140,6 +178,7 @@ export default function CampaignDetailPage() {
   const { campaign, stats, total } = data;
   const pending = stats.PENDING ?? 0;
   const inProgress = stats.IN_PROGRESS ?? 0;
+  const failed = stats.FAILED ?? 0;
   const canStart = campaign.status === "DRAFT" && total > 0;
 
   return (
@@ -176,7 +215,7 @@ export default function CampaignDetailPage() {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {canStart && (
             <button
               onClick={handleStart}
@@ -198,8 +237,74 @@ export default function CampaignDetailPage() {
               <Loader2 className="h-4 w-4 animate-spin" /> Calling in progress…
             </span>
           )}
+          {failed > 0 && !running && (
+            <button
+              onClick={handleRetryFailed}
+              disabled={retrying}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
+            >
+              <RefreshCcw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
+              Retry failed ({failed})
+            </button>
+          )}
+          <a
+            href={`/api/campaigns/${id}/export`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            <Download className="h-4 w-4" /> Export CSV
+          </a>
+          <button
+            onClick={() => {
+              setShowAddInvitees((s) => !s);
+              setShowEdit(false);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            <UserPlus className="h-4 w-4" /> Add invitees
+          </button>
+          <button
+            onClick={() => {
+              setShowEdit((s) => !s);
+              setShowAddInvitees(false);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            <Pencil className="h-4 w-4" /> Edit
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100"
+          >
+            <Trash2 className="h-4 w-4" /> Delete
+          </button>
         </div>
       </div>
+
+      {showEdit && (
+        <div className="mt-5">
+          <EditCampaignForm
+            campaign={campaign}
+            onSaved={() => {
+              setShowEdit(false);
+              load();
+            }}
+            onCancel={() => setShowEdit(false)}
+          />
+        </div>
+      )}
+
+      {showAddInvitees && (
+        <div className="mt-5">
+          <AddInviteesPanel
+            campaignId={id}
+            onDone={() => {
+              setShowAddInvitees(false);
+              load();
+            }}
+            onCancel={() => setShowAddInvitees(false)}
+          />
+        </div>
+      )}
 
       <div className="mt-6">
         <ProgressBar
@@ -220,7 +325,7 @@ export default function CampaignDetailPage() {
         <StatCard label="Undecided" value={stats.UNDECIDED ?? 0} icon={<HelpCircle className="h-4 w-4" />} tone="amber" />
         <StatCard label="Pending" value={pending} icon={<Clock className="h-4 w-4" />} tone="slate" />
         <StatCard label="In progress" value={inProgress} icon={<Loader2 className="h-4 w-4" />} tone="sky" />
-        <StatCard label="Failed" value={stats.FAILED ?? 0} icon={<AlertTriangle className="h-4 w-4" />} tone="red" />
+        <StatCard label="Failed" value={failed} icon={<AlertTriangle className="h-4 w-4" />} tone="red" />
         <StatCard label="Invalid" value={stats.INVALID ?? 0} icon={<Ban className="h-4 w-4" />} tone="slate" faint />
       </div>
 
@@ -374,6 +479,15 @@ export default function CampaignDetailPage() {
           </button>
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <DeleteConfirmModal
+          campaignName={campaign.campaignName}
+          deleting={deleting}
+          onCancel={() => setShowDeleteConfirm(false)}
+          onConfirm={handleDelete}
+        />
+      )}
     </div>
   );
 }
@@ -442,5 +556,291 @@ function DetailSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+function EditCampaignForm({
+  campaign,
+  onSaved,
+  onCancel,
+}: {
+  campaign: CampaignInfo;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [eventName, setEventName] = useState(campaign.eventName);
+  const [eventDate, setEventDate] = useState(
+    campaign.eventDate.slice(0, 10)
+  );
+  const [eventLocation, setEventLocation] = useState(campaign.eventLocation);
+  const [campaignName, setCampaignName] = useState(campaign.campaignName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventName, eventDate, eventLocation, campaignName }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "Failed to save changes");
+        return;
+      }
+      onSaved();
+    } catch {
+      setError("Something went wrong saving changes.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-foreground">Edit campaign</h2>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-slate-400 hover:text-slate-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="Event name">
+          <input
+            required
+            value={eventName}
+            onChange={(e) => setEventName(e.target.value)}
+            className="input"
+          />
+        </FormField>
+        <FormField label="Campaign name">
+          <input
+            required
+            value={campaignName}
+            onChange={(e) => setCampaignName(e.target.value)}
+            className="input"
+          />
+        </FormField>
+        <FormField label="Event date">
+          <input
+            required
+            type="date"
+            value={eventDate}
+            onChange={(e) => setEventDate(e.target.value)}
+            className="input"
+          />
+        </FormField>
+        <FormField label="Event location">
+          <input
+            required
+            value={eventLocation}
+            onChange={(e) => setEventLocation(e.target.value)}
+            className="input"
+          />
+        </FormField>
+      </div>
+
+      {error && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-red-600">
+          <AlertCircle className="h-4 w-4" /> {error}
+        </p>
+      )}
+
+      <div className="mt-5 flex gap-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-strong disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AddInviteesPanel({
+  campaignId,
+  onDone,
+  onCancel,
+}: {
+  campaignId: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{
+    totalRows: number;
+    valid: number;
+    invalid: number;
+  } | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSummary(null);
+    if (!file) {
+      setError("Please choose a CSV file of invitees.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const csvText = await file.text();
+      const res = await fetch(`/api/campaigns/${campaignId}/invitees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csvText }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "Failed to add invitees");
+        return;
+      }
+      setSummary(json.importSummary);
+      onDone();
+    } catch {
+      setError("Something went wrong reading the file.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-foreground">Add invitees</h2>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-slate-400 hover:text-slate-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        Upload another CSV to append more invitees to this campaign. Phones
+        already in this campaign are skipped as duplicates.
+      </p>
+
+      <div className="mt-4">
+        <CsvDropzone file={file} onFileChange={setFile} />
+      </div>
+
+      {error && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-red-600">
+          <AlertCircle className="h-4 w-4" /> {error}
+        </p>
+      )}
+      {summary && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" />
+          Added {summary.valid} invitee(s), skipped {summary.invalid} invalid
+          row(s) out of {summary.totalRows} total.
+        </p>
+      )}
+
+      <div className="mt-5 flex gap-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-strong disabled:opacity-50"
+        >
+          {submitting ? "Adding…" : "Add invitees"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DeleteConfirmModal({
+  campaignName,
+  deleting,
+  onCancel,
+  onConfirm,
+}: {
+  campaignName: string;
+  deleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-xl bg-surface p-5 shadow-xl">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
+          <Trash2 className="h-5 w-5" />
+        </div>
+        <h2 className="mt-3 text-base font-semibold text-foreground">
+          Delete &ldquo;{campaignName}&rdquo;?
+        </h2>
+        <p className="mt-1.5 text-sm text-muted">
+          This permanently deletes the campaign along with all of its
+          invitees and call history. This cannot be undone.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={deleting}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Delete campaign"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-slate-600">
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }

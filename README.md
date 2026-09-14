@@ -104,6 +104,13 @@ long-running worker), so campaigns keep progressing even if no browser tab
 is open, with proper rate limiting against the real calling provider and
 exponential backoff on retries.
 
+**Campaign management** — beyond the required create/start/track flow, the
+dashboard also supports: retrying every `FAILED` invitee in one click
+(resets attempts and resumes calling), exporting the full results as a CSV,
+appending another CSV of invitees to an already-created campaign (with
+duplicate-phone detection against the existing list), and editing or
+deleting a campaign (delete cascades to its invitees and call history).
+
 ## Important technical decisions
 
 - **Postgres over SQLite** — SQLite's file-based storage doesn't persist on
@@ -140,8 +147,6 @@ exponential backoff on retries.
   "Resume Calling" (nothing is lost — progress is persisted after every
   batch — but it isn't a background job).
 - No authentication — anyone with the URL can view/manage campaigns.
-- No CSV re-upload/append-to-existing-campaign flow; a campaign's invitee
-  list is fixed at creation time.
 - Phone/email validation is intentionally loose (format checks only, no
   carrier/deliverability verification).
 
@@ -151,9 +156,10 @@ exponential backoff on retries.
   independently of the browser, plus a rate limiter in front of the (real)
   calling provider.
 - Add authentication and per-user/team campaign scoping.
-- CSV re-import/append and a "retry all failed" bulk action.
-- Export campaign results to CSV for the business team.
 - Real-time updates (SSE/websockets) instead of polling for the dashboard.
+- Stream large CSV uploads in chunks from the browser instead of one JSON
+  request, so imports comfortably scale past what fits in a single
+  serverless request body.
 
 ## AI usage
 
