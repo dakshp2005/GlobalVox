@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone Node CLI scripts, run directly with `node`, not bundled.
+    "scripts/**",
   ]),
 ]);
 

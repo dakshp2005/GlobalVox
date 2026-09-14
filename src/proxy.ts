@@ -5,7 +5,7 @@ export async function proxy(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
   const { pathname } = req.nextUrl;
-  const isAuthPage = pathname === "/login" || pathname === "/signup";
+  const isAuthPage = pathname === "/login";
 
   if (!session && !isAuthPage) {
     if (pathname.startsWith("/api")) {

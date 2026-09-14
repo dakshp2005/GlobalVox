@@ -34,14 +34,17 @@ conversational AI or making real phone calls (per the assessment brief).
    ```
    This both generates the migration SQL under `prisma/migrations/` and
    applies it to your database.
-4. **Run the app:**
+4. **Create your first login.** There's no signup page — accounts are
+   provisioned directly, by design (see Authentication below):
+   ```bash
+   npm run create-user -- you@globalvoxinc.com yourpassword "Your Name"
+   ```
+5. **Run the app:**
    ```bash
    npm run dev
    ```
-   Open http://localhost:3000 — it redirects to `/login`. Use **Sign up** to
-   create your first account (any email/password, no email verification
-   step), then you're into `/campaigns`.
-5. **Try it out** with `sample-invitees.csv` in the repo root when creating a
+   Open http://localhost:3000 — it redirects to `/login`.
+6. **Try it out** with `sample-invitees.csv` in the repo root when creating a
    campaign — it intentionally includes a few invalid rows (bad phone, bad
    email, missing name) to demonstrate import validation.
 
@@ -116,17 +119,21 @@ duplicate-phone detection against the existing list), and editing or
 deleting a campaign (delete cascades to its invitees and call history).
 
 **Authentication** (`src/lib/auth.ts`, `src/lib/password.ts`, `src/proxy.ts`,
-`src/app/api/auth/*`, `src/app/login`, `src/app/signup`): not required by the
-brief, but requested afterward so only known team members can use the tool.
-Deliberately simple — email + password, no email-verification step. Accounts
-are created via a self-service `/signup` (any email/password works; there's
-no company-domain restriction — see Known limitations). Passwords are hashed
-with `bcryptjs`; sessions are a signed JWT (`jose`, HS256) in an HttpOnly
-cookie, verified in `src/proxy.ts` (Next.js 16's replacement for
-`middleware.ts`) on every request — it's the single gate in front of every
-page and API route except `/login`, `/signup`, and `/api/auth/*`. The proxy
-only decodes the JWT (no database lookup), which is both fast and matches
-Next's own guidance to keep Proxy/Middleware checks lightweight.
+`src/app/api/auth/*`, `src/app/login`, `scripts/create-user.js`): not
+required by the brief, but requested afterward so only known team members
+can use the tool. Deliberately simple — email + password, no
+email-verification step, and **no self-service signup**: accounts are
+provisioned directly against the database by whoever runs
+`npm run create-user -- <email> <password> ["Name"]` (a small script using
+the same Prisma Client and bcrypt hashing as the app itself, so "add a user
+from the database" produces a real, working login rather than a raw SQL
+insert with an unusable plaintext password). Passwords are hashed with
+`bcryptjs`; sessions are a signed JWT (`jose`, HS256) in an HttpOnly cookie,
+verified in `src/proxy.ts` (Next.js 16's replacement for `middleware.ts`) on
+every request — it's the single gate in front of every page and API route
+except `/login` and `/api/auth/*`. The proxy only decodes the JWT (no
+database lookup), which is both fast and matches Next's own guidance to keep
+Proxy/Middleware checks lightweight.
 
 ## Important technical decisions
 
@@ -153,9 +160,9 @@ Next's own guidance to keep Proxy/Middleware checks lightweight.
   rather than leaving calling unimplemented.
 - All campaigns are visible to any signed-in user (no per-user/team
   ownership or roles) — fine for a prototype used by one internal team.
-- Self-service signup with no domain restriction or admin approval is
-  acceptable for this prototype's audience (a small internal team who were
-  given the URL directly), in exchange for not needing to send email.
+- Provisioning accounts directly (via `npm run create-user`) rather than
+  self-service signup matches how GlobalVox said they want to manage access:
+  someone with database/deploy access runs the script for each team member.
 - CSV is the input format (as shown in the brief); no other import formats
   were required.
 
@@ -166,13 +173,12 @@ Next's own guidance to keep Proxy/Middleware checks lightweight.
   simply pauses at its current progress and can be resumed later via
   "Resume Calling" (nothing is lost — progress is persisted after every
   batch — but it isn't a background job).
-- Anyone can sign up with any email (no company-domain restriction, no
-  invite/approval step) and, once signed in, can see and manage every
-  campaign — there's no per-user ownership, roles, or admin/member
-  distinction.
-- No password reset flow (no email sending, per the request that prompted
-  auth in the first place) — a forgotten password currently means creating
-  a new account.
+- Once signed in, any user can see and manage every campaign — there's no
+  per-user ownership, roles, or admin/member distinction.
+- No self-service password reset (no email sending, per the request that
+  prompted auth in the first place) — resetting a forgotten password means
+  re-running `npm run create-user` for that email, which updates the
+  existing account's password rather than erroring.
 - Phone/email validation is intentionally loose (format checks only, no
   carrier/deliverability verification).
 
@@ -181,8 +187,10 @@ Next's own guidance to keep Proxy/Middleware checks lightweight.
 - Replace batch polling with a real background job queue so campaigns run
   independently of the browser, plus a rate limiter in front of the (real)
   calling provider.
-- Restrict signup to a company email domain (or switch to invite-only
-  account creation) and add roles/per-team campaign scoping.
+- Add a simple admin UI for provisioning/removing users instead of a CLI
+  script, plus roles and per-team campaign scoping.
+- A proper password-reset flow (would need email sending, intentionally
+  left out here).
 - Real-time updates (SSE/websockets) instead of polling for the dashboard.
 - Stream large CSV uploads in chunks from the browser instead of one JSON
   request, so imports comfortably scale past what fits in a single

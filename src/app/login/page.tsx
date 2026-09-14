@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, LogIn } from "lucide-react";
 
@@ -54,7 +53,10 @@ function LoginForm() {
         <h1 className="mt-3 text-xl font-bold tracking-tight text-foreground">
           Log in to GlobalVox
         </h1>
-        <p className="mt-1 text-sm text-muted">Manage your RSVP campaigns.</p>
+        <p className="mt-1 text-sm text-muted">
+          Manage your RSVP campaigns. Accounts are set up by the GlobalVox
+          team — contact an admin if you need access.
+        </p>
       </div>
 
       <form
@@ -99,13 +101,6 @@ function LoginForm() {
           {submitting ? "Logging in…" : "Log in"}
         </button>
       </form>
-
-      <p className="mt-4 text-center text-sm text-muted">
-        Need an account?{" "}
-        <Link href="/signup" className="font-semibold text-accent hover:text-accent-strong">
-          Sign up
-        </Link>
-      </p>
     </div>
   );
 }
