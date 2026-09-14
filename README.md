@@ -26,6 +26,8 @@ conversational AI or making real phone calls (per the assessment brief).
      `?pgbouncer=true`) — used by the app at runtime.
    - `DIRECT_URL` — the direct connection string (port `5432`) — used only by
      Prisma Migrate.
+   - `AUTH_SECRET` — random string used to sign session cookies. Generate one
+     with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
 3. **Create the schema:**
    ```bash
    npx prisma migrate dev --name init
@@ -36,7 +38,9 @@ conversational AI or making real phone calls (per the assessment brief).
    ```bash
    npm run dev
    ```
-   Open http://localhost:3000 — it redirects to `/campaigns`.
+   Open http://localhost:3000 — it redirects to `/login`. Use **Sign up** to
+   create your first account (any email/password, no email verification
+   step), then you're into `/campaigns`.
 5. **Try it out** with `sample-invitees.csv` in the repo root when creating a
    campaign — it intentionally includes a few invalid rows (bad phone, bad
    email, missing name) to demonstrate import validation.
@@ -45,8 +49,8 @@ conversational AI or making real phone calls (per the assessment brief).
 
 1. Push this repo to GitHub.
 2. Import it into Vercel.
-3. Add the `DATABASE_URL` and `DIRECT_URL` environment variables in the
-   Vercel project settings (same values as your `.env`).
+3. Add the `DATABASE_URL`, `DIRECT_URL`, and `AUTH_SECRET` environment
+   variables in the Vercel project settings (same values as your `.env`).
 4. Deploy. Prisma's client is generated automatically via the `postinstall`
    script (`prisma generate`), and migrations are applied ahead of time by
    running `npx prisma migrate deploy` locally against the same database (or
@@ -111,6 +115,19 @@ appending another CSV of invitees to an already-created campaign (with
 duplicate-phone detection against the existing list), and editing or
 deleting a campaign (delete cascades to its invitees and call history).
 
+**Authentication** (`src/lib/auth.ts`, `src/lib/password.ts`, `src/proxy.ts`,
+`src/app/api/auth/*`, `src/app/login`, `src/app/signup`): not required by the
+brief, but requested afterward so only known team members can use the tool.
+Deliberately simple — email + password, no email-verification step. Accounts
+are created via a self-service `/signup` (any email/password works; there's
+no company-domain restriction — see Known limitations). Passwords are hashed
+with `bcryptjs`; sessions are a signed JWT (`jose`, HS256) in an HttpOnly
+cookie, verified in `src/proxy.ts` (Next.js 16's replacement for
+`middleware.ts`) on every request — it's the single gate in front of every
+page and API route except `/login`, `/signup`, and `/api/auth/*`. The proxy
+only decodes the JWT (no database lookup), which is both fast and matches
+Next's own guidance to keep Proxy/Middleware checks lightweight.
+
 ## Important technical decisions
 
 - **Postgres over SQLite** — SQLite's file-based storage doesn't persist on
@@ -134,8 +151,11 @@ deleting a campaign (delete cascades to its invitees and call history).
 - No real calling provider was shipped with the assessment materials I
   received, so I built a simulated one with realistic behavior (see above)
   rather than leaving calling unimplemented.
-- A single shared workspace (no authentication/multi-tenant campaigns) is
-  fine for a prototype used by one internal team.
+- All campaigns are visible to any signed-in user (no per-user/team
+  ownership or roles) — fine for a prototype used by one internal team.
+- Self-service signup with no domain restriction or admin approval is
+  acceptable for this prototype's audience (a small internal team who were
+  given the URL directly), in exchange for not needing to send email.
 - CSV is the input format (as shown in the brief); no other import formats
   were required.
 
@@ -146,7 +166,13 @@ deleting a campaign (delete cascades to its invitees and call history).
   simply pauses at its current progress and can be resumed later via
   "Resume Calling" (nothing is lost — progress is persisted after every
   batch — but it isn't a background job).
-- No authentication — anyone with the URL can view/manage campaigns.
+- Anyone can sign up with any email (no company-domain restriction, no
+  invite/approval step) and, once signed in, can see and manage every
+  campaign — there's no per-user ownership, roles, or admin/member
+  distinction.
+- No password reset flow (no email sending, per the request that prompted
+  auth in the first place) — a forgotten password currently means creating
+  a new account.
 - Phone/email validation is intentionally loose (format checks only, no
   carrier/deliverability verification).
 
@@ -155,7 +181,8 @@ deleting a campaign (delete cascades to its invitees and call history).
 - Replace batch polling with a real background job queue so campaigns run
   independently of the browser, plus a rate limiter in front of the (real)
   calling provider.
-- Add authentication and per-user/team campaign scoping.
+- Restrict signup to a company email domain (or switch to invite-only
+  account creation) and add roles/per-team campaign scoping.
 - Real-time updates (SSE/websockets) instead of polling for the dashboard.
 - Stream large CSV uploads in chunks from the browser instead of one JSON
   request, so imports comfortably scale past what fits in a single

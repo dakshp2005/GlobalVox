@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import Link from "next/link";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import UserMenu from "@/components/UserMenu";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,7 +21,11 @@ export const metadata: Metadata = {
   description: "Manage AI-voice-agent RSVP calling campaigns for GlobalVox events",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const session = token ? await verifySessionToken(token) : null;
+
   return (
     <html
       lang="en"
@@ -40,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 </span>
               </span>
             </Link>
+            {session && <div className="ml-auto"><UserMenu email={session.email} /></div>}
           </div>
         </header>
         <main className="flex flex-1 flex-col">{children}</main>
