@@ -199,7 +199,9 @@ export default function CampaignDetailPage() {
             <StatusBadge status={campaign.status} />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-            <span className="font-medium text-slate-600">{campaign.eventName}</span>
+            <span className="font-medium text-slate-600">
+              {campaign.eventName}
+            </span>
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="h-3.5 w-3.5" />
               {new Date(campaign.eventDate).toLocaleDateString(undefined, {
@@ -243,7 +245,9 @@ export default function CampaignDetailPage() {
               disabled={retrying}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
             >
-              <RefreshCcw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
+              <RefreshCcw
+                className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`}
+              />
               Retry failed ({failed})
             </button>
           )}
@@ -319,14 +323,55 @@ export default function CampaignDetailPage() {
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total invitees" value={total} icon={<Users className="h-4 w-4" />} tone="slate" />
-        <StatCard label="Confirmed" value={stats.CONFIRMED ?? 0} icon={<CheckCircle2 className="h-4 w-4" />} tone="emerald" />
-        <StatCard label="Declined" value={stats.DECLINED ?? 0} icon={<XCircle className="h-4 w-4" />} tone="rose" />
-        <StatCard label="Undecided" value={stats.UNDECIDED ?? 0} icon={<HelpCircle className="h-4 w-4" />} tone="amber" />
-        <StatCard label="Pending" value={pending} icon={<Clock className="h-4 w-4" />} tone="slate" />
-        <StatCard label="In progress" value={inProgress} icon={<Loader2 className="h-4 w-4" />} tone="sky" />
-        <StatCard label="Failed" value={failed} icon={<AlertTriangle className="h-4 w-4" />} tone="red" />
-        <StatCard label="Invalid" value={stats.INVALID ?? 0} icon={<Ban className="h-4 w-4" />} tone="slate" faint />
+        <StatCard
+          label="Total invitees"
+          value={total}
+          icon={<Users className="h-4 w-4" />}
+          tone="slate"
+        />
+        <StatCard
+          label="Confirmed"
+          value={stats.CONFIRMED ?? 0}
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          tone="emerald"
+        />
+        <StatCard
+          label="Declined"
+          value={stats.DECLINED ?? 0}
+          icon={<XCircle className="h-4 w-4" />}
+          tone="rose"
+        />
+        <StatCard
+          label="Undecided"
+          value={stats.UNDECIDED ?? 0}
+          icon={<HelpCircle className="h-4 w-4" />}
+          tone="amber"
+        />
+        <StatCard
+          label="Pending"
+          value={pending}
+          icon={<Clock className="h-4 w-4" />}
+          tone="slate"
+        />
+        <StatCard
+          label="In progress"
+          value={inProgress}
+          icon={<Loader2 className="h-4 w-4" />}
+          tone="sky"
+        />
+        <StatCard
+          label="Failed"
+          value={failed}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          tone="red"
+        />
+        <StatCard
+          label="Invalid"
+          value={stats.INVALID ?? 0}
+          icon={<Ban className="h-4 w-4" />}
+          tone="slate"
+          faint
+        />
       </div>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -569,9 +614,7 @@ function EditCampaignForm({
   onCancel: () => void;
 }) {
   const [eventName, setEventName] = useState(campaign.eventName);
-  const [eventDate, setEventDate] = useState(
-    campaign.eventDate.slice(0, 10)
-  );
+  const [eventDate, setEventDate] = useState(campaign.eventDate.slice(0, 10));
   const [eventLocation, setEventLocation] = useState(campaign.eventLocation);
   const [campaignName, setCampaignName] = useState(campaign.campaignName);
   const [saving, setSaving] = useState(false);
@@ -585,7 +628,12 @@ function EditCampaignForm({
       const res = await fetch(`/api/campaigns/${campaign.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventName, eventDate, eventLocation, campaignName }),
+        body: JSON.stringify({
+          eventName,
+          eventDate,
+          eventLocation,
+          campaignName,
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -804,8 +852,8 @@ function DeleteConfirmModal({
           Delete &ldquo;{campaignName}&rdquo;?
         </h2>
         <p className="mt-1.5 text-sm text-muted">
-          This permanently deletes the campaign along with all of its
-          invitees and call history. This cannot be undone.
+          This permanently deletes the campaign along with all of its invitees
+          and call history. This cannot be undone.
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
