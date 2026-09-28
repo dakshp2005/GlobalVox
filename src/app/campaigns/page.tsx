@@ -253,6 +253,9 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [campaignName, setCampaignName] = useState("");
+  const [eventTime, setEventTime] = useState("");
+  const [venueDetails, setVenueDetails] = useState("");
+  const [faqNotes, setFaqNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -283,6 +286,9 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
           eventDate,
           eventLocation,
           campaignName,
+          eventTime,
+          venueDetails,
+          faqNotes,
           csvText,
         }),
       });
@@ -350,6 +356,48 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
             placeholder="Ahmedabad"
           />
         </Field>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-dashed border-border p-4">
+        <p className="text-xs font-semibold text-foreground">
+          Details for callers&apos; questions (optional)
+        </p>
+        <p className="mt-0.5 text-xs text-muted">
+          The voice agent uses these to answer questions like &ldquo;what time does it
+          start?&rdquo; or &ldquo;where exactly is it?&rdquo;. Anything left empty gets &ldquo;the
+          team will follow up&rdquo;.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Start time">
+            <input
+              value={eventTime}
+              onChange={(e) => setEventTime(e.target.value)}
+              className="input"
+              placeholder="6:30 PM onwards"
+              maxLength={100}
+            />
+          </Field>
+          <Field label="Venue details">
+            <input
+              value={venueDetails}
+              onChange={(e) => setVenueDetails(e.target.value)}
+              className="input"
+              placeholder="Grand Hall, Riverfront Road, near the stadium"
+              maxLength={500}
+            />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <Field label="Other information (one “Topic: answer” per line)">
+            <textarea
+              value={faqNotes}
+              onChange={(e) => setFaqNotes(e.target.value)}
+              className="input min-h-24"
+              placeholder={"Dress code: Business formal\nParking: Free parking at the venue\nFood: Dinner is included"}
+              maxLength={2000}
+            />
+          </Field>
+        </div>
       </div>
 
       <div className="mt-4">

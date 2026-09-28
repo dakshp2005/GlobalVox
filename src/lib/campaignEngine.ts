@@ -1,9 +1,27 @@
-import type { InviteeStatus } from "@prisma/client";
+import type { CallOutcome, InviteeStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { simulateCall } from "@/lib/callSimulator";
 
 export const MAX_ATTEMPTS = 3;
 export const BATCH_SIZE = 25;
+
+/**
+ * Decides an invitee's status after a call attempt: usable answers are
+ * terminal, anything else is retried until MAX_ATTEMPTS, then FAILED.
+ */
+export function nextInviteeStatus(
+  outcome: CallOutcome,
+  attemptNumber: number
+): InviteeStatus {
+  if (
+    outcome === "CONFIRMED" ||
+    outcome === "DECLINED" ||
+    outcome === "UNDECIDED"
+  ) {
+    return outcome;
+  }
+  return attemptNumber >= MAX_ATTEMPTS ? "FAILED" : "PENDING";
+}
 
 /**
  * Processes one batch of not-yet-resolved invitees for a campaign through
@@ -49,18 +67,7 @@ export async function processCampaignBatch(campaignId: string) {
         },
       });
 
-      const resolved =
-        result.outcome === "CONFIRMED" ||
-        result.outcome === "DECLINED" ||
-        result.outcome === "UNDECIDED";
-
-      const exhaustedRetries = attemptNumber >= MAX_ATTEMPTS;
-
-      const nextStatus: InviteeStatus = resolved
-        ? (result.outcome as InviteeStatus)
-        : exhaustedRetries
-          ? "FAILED"
-          : "PENDING"; // retried in a later batch
+      const nextStatus = nextInviteeStatus(result.outcome, attemptNumber);
 
       await prisma.invitee.update({
         where: { id: invitee.id },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   PhoneOff,
 } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
+import CallPanel from "@/components/CallPanel";
 
 interface CallAttempt {
   id: string;
@@ -22,6 +23,8 @@ interface CallAttempt {
   durationSeconds: number | null;
   outcome: string | null;
   errorMessage: string | null;
+  summary: string | null;
+  transcript: { role: "agent" | "user"; content: string }[] | null;
 }
 
 interface InviteeDetail {
@@ -36,6 +39,11 @@ interface InviteeDetail {
     id: string;
     campaignName: string;
     eventName: string;
+    eventDate: string;
+    eventLocation: string;
+    eventTime: string | null;
+    venueDetails: string | null;
+    faqNotes: string | null;
   };
   callAttempts: CallAttempt[];
 }
@@ -45,7 +53,7 @@ export default function InviteeDetailPage() {
   const [invitee, setInvitee] = useState<InviteeDetail | null>(null);
   const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch(`/api/invitees/${inviteeId}`)
       .then((r) => {
         if (!r.ok) throw new Error();
@@ -54,6 +62,8 @@ export default function InviteeDetailPage() {
       .then((d) => setInvitee(d.invitee))
       .catch(() => setError(true));
   }, [inviteeId]);
+
+  useEffect(load, [load]);
 
   if (error) {
     return (
@@ -111,6 +121,23 @@ export default function InviteeDetailPage() {
         )}
       </div>
 
+      {invitee.status !== "INVALID" && (
+        <CallPanel
+          inviteeId={invitee.id}
+          inviteeName={invitee.name}
+          context={{
+            name: invitee.name,
+            event: invitee.campaign.eventName,
+            eventDate: invitee.campaign.eventDate,
+            location: invitee.campaign.eventLocation,
+            eventTime: invitee.campaign.eventTime,
+            venueDetails: invitee.campaign.venueDetails,
+            faqNotes: invitee.campaign.faqNotes,
+          }}
+          onFinished={load}
+        />
+      )}
+
       <h2 className="mt-8 mb-3 flex items-center gap-1.5 text-sm font-semibold text-foreground">
         <CalendarClock className="h-4 w-4 text-muted" /> Call history
       </h2>
@@ -133,6 +160,26 @@ export default function InviteeDetailPage() {
                     {c.durationSeconds ?? 0}s
                     {c.errorMessage ? ` · ${c.errorMessage}` : ""}
                   </div>
+                  {c.summary && (
+                    <p className="mt-1.5 text-sm text-foreground">{c.summary}</p>
+                  )}
+                  {c.transcript && c.transcript.length > 0 && (
+                    <details className="mt-1.5 text-xs text-muted">
+                      <summary className="cursor-pointer font-medium hover:text-accent">
+                        View transcript
+                      </summary>
+                      <div className="mt-1.5 flex flex-col gap-1">
+                        {c.transcript.map((t, i) => (
+                          <p key={i}>
+                            <span className="font-semibold">
+                              {t.role === "agent" ? "Agent" : "Invitee"}:
+                            </span>{" "}
+                            {t.content}
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
                 {c.outcome && <StatusBadge status={c.outcome} size="sm" />}
               </div>

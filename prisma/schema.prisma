@@ -50,6 +50,10 @@ model Campaign {
   eventDate     DateTime
   eventLocation String
   campaignName  String
+  // Optional details the voice agent can answer callers' questions with.
+  eventTime     String?        // e.g. "6:30 PM onwards"
+  venueDetails  String?        // address / landmark / directions
+  faqNotes      String?        // one "Topic: answer" per line, e.g. "Parking: free at the venue"
   status        CampaignStatus @default(DRAFT)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -89,6 +93,8 @@ model CallAttempt {
   durationSeconds Int?
   outcome         CallOutcome?
   errorMessage    String?
+  transcript      Json?        // [{ role: "agent" | "user", content }] for AI voice calls
+  summary         String?      // short AI-written summary of the call
 
   @@index([inviteeId])
   @@map("call_attempts")

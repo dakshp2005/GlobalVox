@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseInviteeCsv } from "@/lib/csv";
+import { cleanEventDetails } from "@/lib/eventDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid eventDate" }, { status: 400 });
   }
 
+  const details = cleanEventDetails(body);
+  if (!details.ok) {
+    return NextResponse.json({ error: details.error }, { status: 400 });
+  }
+
   const { rows, parseErrors } = parseInviteeCsv(csvText);
 
   if (rows.length === 0) {
@@ -67,6 +73,7 @@ export async function POST(req: NextRequest) {
       eventDate: parsedDate,
       eventLocation,
       campaignName,
+      ...details.data,
     },
   });
 

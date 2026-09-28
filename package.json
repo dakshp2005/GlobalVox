@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "create-user": "node scripts/create-user.js"
+    "create-user": "node scripts/create-user.js",
+    "download-models": "node scripts/download-vosk-models.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -19,7 +20,8 @@
     "papaparse": "^5.7.0",
     "prisma": "^6.19.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "vosk-browser": "^0.0.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

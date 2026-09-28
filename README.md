@@ -135,6 +135,103 @@ except `/login` and `/api/auth/*`. The proxy only decodes the JWT (no
 database lookup), which is both fast and matches Next's own guidance to keep
 Proxy/Middleware checks lightweight.
 
+## AI voice agent (local, Ollama)
+
+Besides the simulated batch calling, any invitee's page has an **AI voice call**
+panel: click *Call*, speak, and a local LLM plays the GlobalVox agent, asks for
+the RSVP, and saves the result (status, summary, full transcript, duration) as a
+call attempt.
+
+**Setup**
+1. Install [Ollama](https://ollama.com) and run `ollama pull gemma3:4b`.
+2. Set `OLLAMA_URL` / `OLLAMA_MODEL` in `.env` (defaults: `http://localhost:11434`,
+   `gemma3:4b`). `gemma2:9b` also works but is ~2-3 tokens/sec on a CPU-only
+   laptop, which is too slow for a natural voice conversation.
+3. Run `npx prisma migrate deploy` (adds `transcript` and `summary` to call attempts).
+4. `npm run dev`, open an invitee, and click **Call**. Use Chrome or Edge and allow the mic.
+
+**How it works:** the browser does speech-to-text (Web Speech API) and
+text-to-speech (`speechSynthesis`, spoken sentence by sentence as the reply
+streams in). Each turn, `/api/voice/turn` streams the reply from Ollama using a
+prompt built from the invitee and campaign. When the call ends,
+`/api/invitees/[id]/call` asks the model for a schema-constrained
+`{outcome, summary}`, stores it, and applies the same retry rules as the batch
+engine (`nextInviteeStatus`). If the invitee never speaks the result is
+`NO_ANSWER` and it is retried.
+
+**Limitations:** Ollama runs on your machine, so the deployed Vercel app cannot
+use it (it keeps using the simulator). Chrome's speech recognition sends audio
+to Google's servers, so it needs internet. The mic is off while the agent
+speaks (to avoid echo); use *Interrupt the agent* to cut in. Ending a call takes
+~10-15 s on CPU while the model summarises it.
+
+## Lite mode (rules + small model, works with or without internet)
+
+The same call panel has a second tab, **Lite (small model)**, for environments
+where a full conversational model is too slow or too heavy and the agent only
+needs a yes / no / maybe. It reduces what is expected of the model instead of
+removing it:
+
+`ask` -> `listen` -> `understand (rules first, model as a second opinion)` ->
+`next scripted question` -> `goodbye` -> `save locally, sync when online`.
+
+- **Every answer is validated.** Attendance needs yes / no / maybe, guests need
+  a number or "none", and "when" needs a day or timeframe. Random or unrelated
+  text is never accepted: the agent re-asks the same question with a hint
+  (twice), then ends safely (`UNDECIDED`, or `CONFIRMED` with "guest count not
+  captured"). See `src/lib/offline/script.ts`.
+- **Rules first** (`src/lib/offline/intent.ts`): English, Hindi and Gujarati
+  keywords decide clear answers in well under a millisecond.
+- **Model second** (`/api/voice/classify`): only answers the rules cannot place
+  go to a local model through Ollama (`OLLAMA_CLASSIFY_MODEL`, default
+  `gemma3:4b`) with a one-word, few-shot prompt. If the model is down or slow
+  the call keeps working on rules alone and just re-asks. A 1B model was tried
+  and rejected: it wrongly turned most random text into answers.
+- **Speech in:** Chrome's recognition while online, the on-device Vosk model
+  (`npm run download-models`, ~190 MB, one time) when offline or if Chrome's
+  service fails. **Speech out:** voices installed on the device.
+- **Results are saved on the device first** (`src/lib/offline/queue.ts`) and
+  POSTed to `/api/invitees/[id]/offline-result`; they sync automatically when
+  the connection returns. Retries are safe (the same call is stored once). The
+  panel has a **Simulate no internet** switch for demos.
+
+Measured on a CPU-only laptop (30 test answers, English/Hindi/Gujarati): 28
+understood correctly, 0 of 16 junk answers accepted, 11 answers decided by rules
+instantly; answers that reach the model take about 4 s.
+
+| | AI model mode | Lite mode |
+|---|---|---|
+| Conversation | Free-form | Fixed script, yes / no / maybe + guests + when |
+| Understanding | 4B model on every turn | Rules; model only for unclear answers |
+| Typical reply latency (CPU only) | ~3-9 s | Instant for clear answers, ~4 s when the model is consulted |
+| Needs the model server | Yes | Optional |
+| Random answers | Model decides | Rejected and re-asked |
+
+**Follow-up questions and the closing round.** Callers can ask things like
+"what's the timing?", "where's the venue?", "which date is it?" or "can you
+repeat that?" at any point of the call. These are answered **on the device**
+(`src/lib/offline/faq.ts`, English/Hindi/Gujarati, no model, instant) and the
+agent then re-asks the question it was on, without counting it as an unclear
+answer. When the RSVP is captured the agent asks **"Do you have any
+questions?"**, answers them ("Is there anything else you'd like to know?", up to
+4) and only says goodbye when the invitee has none.
+
+The answers come from optional **event details** on the campaign (create/edit
+form): *start time*, *venue details* and *other information* written one
+`Topic: answer` per line (e.g. `Parking: Free at the venue`, `Dress code: Business
+formal`). Anything not filled in, and any question the device can't place, gets
+"I don't have that detail, I'll pass your question to the team" and the
+question is listed in the call summary ("Questions for the team to follow up")
+so nothing is lost. Answering those with the server model is the planned next
+step.
+
+**Limits:** offline speech recognition is less accurate than Google's; Hindi and
+Gujarati speech output needs a voice installed in the operating system
+(otherwise replies show as text); the model can still misjudge unusual
+phrasing (it may pick "maybe" for a polite "no"); real phone calls always need
+a network. If you pulled `gemma3:1b` while experimenting, `ollama rm gemma3:1b`
+frees ~0.8 GB.
+
 ## Important technical decisions
 
 - **Postgres over SQLite** — SQLite's file-based storage doesn't persist on
@@ -198,7 +295,7 @@ Proxy/Middleware checks lightweight.
 
 ## AI usage
 
-- **Tools used:** Claude (Claude Code) for the full implementation —
+- **Tools used:** Claude (Claude Code) for the full implementation, including the local Ollama voice agent —
   scaffolding, schema design, API routes, UI, and this README.
 - **What I used it for:** Turning the PDF assessment brief into a concrete
   plan and stack decision, then generating the Next.js/Prisma application
