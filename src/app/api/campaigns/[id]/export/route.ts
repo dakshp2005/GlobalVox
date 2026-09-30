@@ -34,6 +34,7 @@ export async function GET(
     "status",
     "attempt_count",
     "invalid_reason",
+    "callback_at",
   ];
   const rows = invitees.map((inv) =>
     [
@@ -44,6 +45,7 @@ export async function GET(
       inv.status,
       String(inv.attemptCount),
       inv.invalidReason ?? "",
+      inv.callbackAt?.toISOString() ?? "",
     ]
       .map(csvEscape)
       .join(",")

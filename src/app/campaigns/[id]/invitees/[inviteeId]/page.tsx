@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import CallPanel from "@/components/CallPanel";
+import { isAgentVoice } from "@/lib/agentPrompt";
 
 interface CallAttempt {
   id: string;
@@ -24,6 +25,7 @@ interface CallAttempt {
   outcome: string | null;
   errorMessage: string | null;
   summary: string | null;
+  callbackAt: string | null;
   transcript: { role: "agent" | "user"; content: string }[] | null;
 }
 
@@ -35,6 +37,7 @@ interface InviteeDetail {
   status: string;
   attemptCount: number;
   invalidReason: string | null;
+  callbackAt: string | null;
   campaign: {
     id: string;
     campaignName: string;
@@ -44,6 +47,8 @@ interface InviteeDetail {
     eventTime: string | null;
     venueDetails: string | null;
     faqNotes: string | null;
+    agentPrompt: string | null;
+    agentVoice: string | null;
   };
   callAttempts: CallAttempt[];
 }
@@ -113,6 +118,16 @@ export default function InviteeDetailPage() {
           <InfoRow icon={<RefreshCcw className="h-4 w-4" />} label="Call attempts" value={String(invitee.attemptCount)} />
         </dl>
 
+        {invitee.status === "CALLBACK" && invitee.callbackAt && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-violet-50 px-3.5 py-2.5 text-sm text-violet-800">
+            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Asked to be called back {formatWhen(invitee.callbackAt)}. The campaign calls
+              again once that time comes.
+            </span>
+          </div>
+        )}
+
         {invitee.invalidReason && (
           <div className="mt-4 flex items-start gap-2 rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
             <PhoneOff className="mt-0.5 h-4 w-4 shrink-0" />
@@ -125,6 +140,9 @@ export default function InviteeDetailPage() {
         <CallPanel
           inviteeId={invitee.id}
           inviteeName={invitee.name}
+          campaignId={invitee.campaign.id}
+          agentVoice={isAgentVoice(invitee.campaign.agentVoice) ? invitee.campaign.agentVoice : "female"}
+          customPrompt={Boolean(invitee.campaign.agentPrompt)}
           context={{
             name: invitee.name,
             event: invitee.campaign.eventName,
@@ -159,6 +177,7 @@ export default function InviteeDetailPage() {
                     {new Date(c.startedAt).toLocaleString()} ·{" "}
                     {c.durationSeconds ?? 0}s
                     {c.errorMessage ? ` · ${c.errorMessage}` : ""}
+                    {c.callbackAt ? ` · call back ${formatWhen(c.callbackAt)}` : ""}
                   </div>
                   {c.summary && (
                     <p className="mt-1.5 text-sm text-foreground">{c.summary}</p>
@@ -189,6 +208,16 @@ export default function InviteeDetailPage() {
       )}
     </div>
   );
+}
+
+function formatWhen(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function InfoRow({

@@ -1,32 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
+  Languages,
   Loader2,
   Mic,
   PhoneCall,
   PhoneOff,
   Send,
+  Settings2,
   Volume2,
 } from "lucide-react";
-import { LANGUAGES, useVoiceCall, type CallPhase, type MicStatus } from "@/lib/useVoiceCall";
+import { LANGUAGES, useVoiceCall, type CallPhase, type CallResult } from "@/lib/useVoiceCall";
 import type { Lang } from "@/lib/voiceLines";
-
-const MIC_LABEL: Record<MicStatus, string> = {
-  off: "Microphone off — type your reply",
-  starting: "Starting microphone…",
-  waiting: "Your turn — speak now",
-  sound: "Hearing sound…",
-  speech: "Speech detected",
-};
+import type { AgentVoice } from "@/lib/agentPrompt";
 
 const PHASE_LABEL: Record<CallPhase, string> = {
   idle: "Ready to call",
-  connecting: "Connecting to the voice agent…",
+  connecting: "Connecting to the local voice agent…",
   listening: "Listening…",
   thinking: "Thinking…",
-  speaking: "Agent is speaking",
+  speaking: "Agent is speaking — just talk to cut in",
   ending: "Saving the call result…",
   done: "Call finished",
   error: "Call failed",
@@ -35,23 +31,33 @@ const PHASE_LABEL: Record<CallPhase, string> = {
 export default function VoiceCall({
   inviteeId,
   inviteeName,
+  campaignId,
+  agentVoice,
+  customPrompt,
   onFinished,
 }: {
   inviteeId: string;
   inviteeName: string;
+  campaignId: string;
+  agentVoice: AgentVoice;
+  customPrompt: boolean;
   onFinished: () => void;
 }) {
-  const [result, setResult] = useState<{ outcome: string; summary: string } | null>(null);
+  const [result, setResult] = useState<CallResult | null>(null);
   const [text, setText] = useState("");
-  const call = useVoiceCall(inviteeId, (r) => {
-    setResult(r);
-    onFinished();
-  });
+  const call = useVoiceCall(
+    inviteeId,
+    (r) => {
+      setResult(r);
+      onFinished();
+    },
+    agentVoice
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [call.turns, call.interim]);
+  }, [call.turns]);
 
   const inCall = ["connecting", "listening", "thinking", "speaking"].includes(call.phase);
   const busy = call.phase === "connecting" || call.phase === "ending";
@@ -83,12 +89,24 @@ export default function VoiceCall({
         </div>
 
         <div className="flex items-center gap-2">
+          {inCall && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent"
+              title="The agent follows the invitee's language automatically"
+              aria-live="polite"
+            >
+              <Languages className="h-3 w-3" />
+              {LANGUAGES.find((l) => l.code === call.lang)?.label}
+              {call.langSwitched && <span className="font-normal opacity-75">· switched</span>}
+            </span>
+          )}
           {!inCall && (
             <select
               value={call.lang}
               onChange={(e) => call.setLang(e.target.value as Lang)}
               disabled={busy}
-              aria-label="Call language"
+              aria-label="Starting language"
+              title="Language the call starts in; the agent switches if the invitee speaks another"
               className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm"
             >
               {LANGUAGES.map((l) => (
@@ -122,25 +140,24 @@ export default function VoiceCall({
         </div>
       </div>
 
-      {!call.micSupported && (
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Voice input needs Chrome or Edge. You can still talk to the agent by typing below.
-        </p>
+      {!inCall && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted">
+          <span>Runs on local models (speech, AI and voice), no internet needed.</span>
+          <Link
+            href={`/campaigns/${campaignId}?edit=agent`}
+            className="inline-flex items-center gap-1 font-medium hover:text-accent"
+          >
+            <Settings2 className="h-3 w-3" />
+            {customPrompt ? "Custom" : "Default"} agent instructions · Edit
+          </Link>
+        </div>
       )}
 
-      {inCall && call.micSupported && (
+      {inCall && call.micStatus !== "off" && (
         <div className="mt-3 rounded-lg border border-border bg-background px-3 py-2">
           <div className="flex items-center justify-between gap-3 text-xs">
-            <span
-              className={
-                call.phase === "listening" && call.micStatus !== "off"
-                  ? "font-semibold text-accent"
-                  : "text-muted"
-              }
-            >
-              {call.phase === "listening"
-                ? MIC_LABEL[call.micStatus]
-                : "Wait for the agent to finish, then speak"}
+            <span className={call.phase === "listening" ? "font-semibold text-accent" : "text-muted"}>
+              {call.micStatus === "starting" ? "Starting microphone…" : "Microphone on — talk any time"}
             </span>
             <span
               className="hidden max-w-[45%] truncate text-muted sm:block"
@@ -165,15 +182,6 @@ export default function VoiceCall({
         </div>
       )}
 
-      {call.voiceMissing && (
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          No {LANGUAGES.find((l) => l.code === call.lang)?.label} voice is installed in this
-          browser, so the agent&apos;s replies will appear as text only. For spoken Hindi and
-          Gujarati, open this page in Microsoft Edge (it includes free Hindi and Gujarati
-          voices), or add the language under Windows Settings → Time &amp; language → Speech.
-        </p>
-      )}
-
       {call.notice && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           {call.notice}
@@ -186,7 +194,7 @@ export default function VoiceCall({
         </p>
       )}
 
-      {(call.turns.length > 0 || call.interim) && (
+      {call.turns.length > 0 && (
         <div
           ref={scrollRef}
           className="mt-4 flex max-h-72 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-background p-3"
@@ -194,27 +202,30 @@ export default function VoiceCall({
           {call.turns.map((t, i) => (
             <Bubble key={i} role={t.role} content={t.content} />
           ))}
-          {call.interim && <Bubble role="user" content={call.interim} faded />}
         </div>
       )}
 
       {result && call.phase === "done" && (
         <div className="mt-4 rounded-lg bg-accent-soft px-3.5 py-2.5 text-sm text-foreground">
-          <span className="font-semibold">Result: {result.outcome.replace("_", " ")}</span>
+          <span className="font-semibold">Result: {result.outcome.replaceAll("_", " ")}</span>
+          {result.callbackAt && (
+            <span className="font-semibold">
+              {" "}· call back{" "}
+              {new Date(result.callbackAt).toLocaleString(undefined, {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
           {result.summary && <span className="text-muted"> — {result.summary}</span>}
         </div>
       )}
 
       {inCall && (
         <div className="mt-3 flex flex-col gap-2">
-          {call.phase === "speaking" && (
-            <button
-              onClick={call.interrupt}
-              className="self-start text-xs font-medium text-accent hover:underline"
-            >
-              Interrupt the agent
-            </button>
-          )}
           <form onSubmit={submit} className="flex gap-2">
             <input
               value={text}
@@ -238,22 +249,14 @@ export default function VoiceCall({
   );
 }
 
-function Bubble({
-  role,
-  content,
-  faded,
-}: {
-  role: "agent" | "user";
-  content: string;
-  faded?: boolean;
-}) {
+function Bubble({ role, content }: { role: "agent" | "user"; content: string }) {
   const agent = role === "agent";
   return (
     <div className={`flex ${agent ? "justify-start" : "justify-end"}`}>
       <div
         className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
           agent ? "bg-surface text-foreground ring-1 ring-border" : "bg-accent text-white"
-        } ${faded ? "opacity-60" : ""}`}
+        }`}
       >
         {content}
       </div>

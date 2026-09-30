@@ -18,7 +18,9 @@ export async function POST(
 
   const result = await processCampaignBatch(id);
 
-  if (result.remaining === 0) {
+  // Nothing is due right now. Scheduled callbacks keep the campaign running (they're
+  // picked up once their time comes), otherwise it's finished.
+  if (result.remaining === 0 && result.scheduled === 0) {
     await prisma.campaign.update({
       where: { id },
       data: { status: "COMPLETED" },

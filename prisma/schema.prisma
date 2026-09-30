@@ -22,6 +22,7 @@ enum InviteeStatus {
   CONFIRMED     // will attend
   DECLINED      // will not attend
   UNDECIDED     // unsure / decide later
+  CALLBACK      // asked to be called back later; see Invitee.callbackAt
   FAILED        // exhausted retries without a usable answer (no-answer, busy, provider error)
   INVALID       // failed import validation (bad phone/email) - never called
 }
@@ -30,6 +31,7 @@ enum CallOutcome {
   CONFIRMED
   DECLINED
   UNDECIDED
+  CALLBACK_REQUESTED
   NO_ANSWER
   PROVIDER_ERROR
 }
@@ -54,6 +56,9 @@ model Campaign {
   eventTime     String?        // e.g. "6:30 PM onwards"
   venueDetails  String?        // address / landmark / directions
   faqNotes      String?        // one "Topic: answer" per line, e.g. "Parking: free at the venue"
+  // Voice agent settings, editable from the campaign form. Null = use the built-in default.
+  agentPrompt   String?        // the agent's instructions (persona, tone, what to ask)
+  agentVoice    String?        // "female" | "male": voice preference and Hindi/Gujarati verb forms
   status        CampaignStatus @default(DRAFT)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -74,6 +79,7 @@ model Invitee {
   status        InviteeStatus @default(PENDING)
   attemptCount  Int           @default(0)
   invalidReason String?       // set when status = INVALID
+  callbackAt    DateTime?     // set when status = CALLBACK: when the invitee asked to be called
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -95,6 +101,7 @@ model CallAttempt {
   errorMessage    String?
   transcript      Json?        // [{ role: "agent" | "user", content }] for AI voice calls
   summary         String?      // short AI-written summary of the call
+  callbackAt      DateTime?    // callback time the invitee asked for on this call
 
   @@index([inviteeId])
   @@map("call_attempts")

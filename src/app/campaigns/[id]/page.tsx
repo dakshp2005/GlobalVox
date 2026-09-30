@@ -26,10 +26,13 @@ import {
   Pencil,
   Trash2,
   X,
+  PhoneForwarded,
 } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import ProgressBar from "@/components/ProgressBar";
 import CsvDropzone from "@/components/CsvDropzone";
+import AgentSettings from "@/components/AgentSettings";
+import { DEFAULT_AGENT_PROMPT, isAgentVoice, type AgentVoice } from "@/lib/agentPrompt";
 
 interface Invitee {
   id: string;
@@ -39,6 +42,7 @@ interface Invitee {
   status: string;
   attemptCount: number;
   invalidReason: string | null;
+  callbackAt: string | null;
 }
 
 interface CampaignInfo {
@@ -49,6 +53,8 @@ interface CampaignInfo {
   eventTime?: string | null;
   venueDetails?: string | null;
   faqNotes?: string | null;
+  agentPrompt?: string | null;
+  agentVoice?: string | null;
   campaignName: string;
   status: string;
 }
@@ -66,6 +72,7 @@ const STATUS_TABS = [
   "CONFIRMED",
   "DECLINED",
   "UNDECIDED",
+  "CALLBACK",
   "PENDING",
   "IN_PROGRESS",
   "FAILED",
@@ -82,7 +89,11 @@ export default function CampaignDetailPage() {
   const [page, setPage] = useState(1);
   const [running, setRunning] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
+  // "?edit=agent" (linked from the invitee call panel) opens the form on the agent settings.
+  // Only the client reads it; the first render is the loading skeleton either way.
+  const [showEdit, setShowEdit] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("edit")
+  );
   const [showAddInvitees, setShowAddInvitees] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -240,6 +251,7 @@ export default function CampaignDetailPage() {
   const pending = stats.PENDING ?? 0;
   const inProgress = stats.IN_PROGRESS ?? 0;
   const failed = stats.FAILED ?? 0;
+  const callbacks = stats.CALLBACK ?? 0;
   const canStart = campaign.status === "DRAFT" && total > 0;
 
   return (
@@ -287,7 +299,7 @@ export default function CampaignDetailPage() {
               <PhoneCall className="h-4 w-4" /> Start campaign
             </button>
           )}
-          {campaign.status === "RUNNING" && pending > 0 && !running && (
+          {campaign.status === "RUNNING" && pending + callbacks > 0 && !running && (
             <button
               onClick={processBatchLoop}
               className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent-strong"
@@ -379,13 +391,14 @@ export default function CampaignDetailPage() {
             { value: stats.CONFIRMED ?? 0, color: "bg-emerald-500" },
             { value: stats.DECLINED ?? 0, color: "bg-rose-500" },
             { value: stats.UNDECIDED ?? 0, color: "bg-amber-400" },
+            { value: callbacks, color: "bg-violet-400" },
             { value: stats.IN_PROGRESS ?? 0, color: "bg-sky-400" },
             { value: stats.FAILED ?? 0, color: "bg-red-400" },
           ]}
         />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard
           label="Total invitees"
           value={total}
@@ -409,6 +422,12 @@ export default function CampaignDetailPage() {
           value={stats.UNDECIDED ?? 0}
           icon={<HelpCircle className="h-4 w-4" />}
           tone="amber"
+        />
+        <StatCard
+          label="Callbacks"
+          value={callbacks}
+          icon={<PhoneForwarded className="h-4 w-4" />}
+          tone="violet"
         />
         <StatCard
           label="Pending"
@@ -508,6 +527,11 @@ export default function CampaignDetailPage() {
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       <StatusBadge status={inv.status} size="sm" />
+                      {inv.status === "CALLBACK" && inv.callbackAt && (
+                        <span className="truncate text-xs text-violet-700">
+                          {formatCallback(inv.callbackAt)}
+                        </span>
+                      )}
                       {inv.invalidReason && (
                         <span className="truncate text-xs text-slate-400">
                           {inv.invalidReason}
@@ -564,7 +588,11 @@ export default function CampaignDetailPage() {
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs text-muted">
                   <span>{inv.phone}</span>
-                  <span>{inv.attemptCount} attempt(s)</span>
+                  <span>
+                    {inv.status === "CALLBACK" && inv.callbackAt
+                      ? formatCallback(inv.callbackAt)
+                      : `${inv.attemptCount} attempt(s)`}
+                  </span>
                 </div>
                 {inv.invalidReason && (
                   <div className="mt-1 text-xs text-slate-400">
@@ -645,7 +673,18 @@ const TONE: Record<string, string> = {
   amber: "text-amber-700 bg-amber-50",
   sky: "text-sky-700 bg-sky-50",
   red: "text-red-700 bg-red-50",
+  violet: "text-violet-700 bg-violet-50",
 };
+
+function formatCallback(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 function StatCard({
   label,
@@ -721,6 +760,10 @@ function EditCampaignForm({
   const [eventTime, setEventTime] = useState(campaign.eventTime ?? "");
   const [venueDetails, setVenueDetails] = useState(campaign.venueDetails ?? "");
   const [faqNotes, setFaqNotes] = useState(campaign.faqNotes ?? "");
+  const [agentPrompt, setAgentPrompt] = useState(campaign.agentPrompt ?? DEFAULT_AGENT_PROMPT);
+  const [agentVoice, setAgentVoice] = useState<AgentVoice>(
+    isAgentVoice(campaign.agentVoice) ? campaign.agentVoice : "female"
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -740,6 +783,8 @@ function EditCampaignForm({
           eventTime,
           venueDetails,
           faqNotes,
+          agentPrompt,
+          agentVoice,
         }),
       });
       const json = await res.json();
@@ -848,6 +893,13 @@ function EditCampaignForm({
           </FormField>
         </div>
       </div>
+
+      <AgentSettings
+        prompt={agentPrompt}
+        voice={agentVoice}
+        onPromptChange={setAgentPrompt}
+        onVoiceChange={setAgentVoice}
+      />
 
       {error && (
         <p className="mt-3 flex items-center gap-1.5 text-sm text-red-600">

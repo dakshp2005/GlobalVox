@@ -18,6 +18,8 @@ import {
 import StatusBadge from "@/components/StatusBadge";
 import ProgressBar from "@/components/ProgressBar";
 import CsvDropzone from "@/components/CsvDropzone";
+import AgentSettings from "@/components/AgentSettings";
+import { DEFAULT_AGENT_PROMPT, type AgentVoice } from "@/lib/agentPrompt";
 
 interface CampaignRow {
   id: string;
@@ -256,6 +258,8 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
   const [eventTime, setEventTime] = useState("");
   const [venueDetails, setVenueDetails] = useState("");
   const [faqNotes, setFaqNotes] = useState("");
+  const [agentPrompt, setAgentPrompt] = useState(DEFAULT_AGENT_PROMPT);
+  const [agentVoice, setAgentVoice] = useState<AgentVoice>("female");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +293,8 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
           eventTime,
           venueDetails,
           faqNotes,
+          agentPrompt,
+          agentVoice,
           csvText,
         }),
       });
@@ -399,6 +405,13 @@ function NewCampaignForm({ onCreated }: { onCreated: () => void }) {
           </Field>
         </div>
       </div>
+
+      <AgentSettings
+        prompt={agentPrompt}
+        voice={agentVoice}
+        onPromptChange={setAgentPrompt}
+        onVoiceChange={setAgentVoice}
+      />
 
       <div className="mt-4">
         <CsvDropzone file={file} onFileChange={setFile} />

@@ -135,35 +135,73 @@ except `/login` and `/api/auth/*`. The proxy only decodes the JWT (no
 database lookup), which is both fast and matches Next's own guidance to keep
 Proxy/Middleware checks lightweight.
 
-## AI voice agent (local, Ollama)
+## AI voice agent (fully local)
 
-Besides the simulated batch calling, any invitee's page has an **AI voice call**
-panel: click *Call*, speak, and a local LLM plays the GlobalVox agent, asks for
-the RSVP, and saves the result (status, summary, full transcript, duration) as a
-call attempt.
+Any invitee's page has an **AI voice call** panel. Click *Call* and a local voice agent
+phones the invitee in the browser, like the kataria demo: it speaks first, listens,
+lets the invitee cut in at any time, follows them between English, Hindi and Gujarati,
+and saves the result (status, summary, callback time, transcript, duration) as a call
+attempt. **Everything runs on local models, with no cloud APIs or API keys**, so calls
+don't depend on a good internet connection.
+
+The speech side runs in a separate Python service, `../voice-server` (Pipecat + Silero
+VAD + Smart Turn + Whisper + Ollama + Kokoro/MMS voices). See
+[`voice-server/README.md`](../voice-server/README.md) for how it works, GPU setup and
+measured performance.
 
 **Setup**
-1. Install [Ollama](https://ollama.com) and run `ollama pull gemma3:4b`.
-2. Set `OLLAMA_URL` / `OLLAMA_MODEL` in `.env` (defaults: `http://localhost:11434`,
-   `gemma3:4b`). `gemma2:9b` also works but is ~2-3 tokens/sec on a CPU-only
-   laptop, which is too slow for a natural voice conversation.
-3. Run `npx prisma migrate deploy` (adds `transcript` and `summary` to call attempts).
-4. `npm run dev`, open an invitee, and click **Call**. Use Chrome or Edge and allow the mic.
+1. Install [Ollama](https://ollama.com); pull `gemma3:12b` on a GPU server (`gemma3:4b` on a
+   laptop). The app also uses it to classify each finished call (`OLLAMA_MODEL`).
+2. Set up the voice server (`../voice-server/README.md`), then start it: `npm run voice-server`.
+3. Run `npx prisma migrate deploy` (adds call transcripts and summaries, the agent
+   settings on campaigns and callback times).
+4. `npm run dev`, open an invitee, and click **Call**. Allow the microphone. Set
+   `NEXT_PUBLIC_VOICE_SERVER_URL` if the voice server isn't at `ws://localhost:8765/ws`.
 
-**How it works:** the browser does speech-to-text (Web Speech API) and
-text-to-speech (`speechSynthesis`, spoken sentence by sentence as the reply
-streams in). Each turn, `/api/voice/turn` streams the reply from Ollama using a
-prompt built from the invitee and campaign. When the call ends,
-`/api/invitees/[id]/call` asks the model for a schema-constrained
-`{outcome, summary}`, stores it, and applies the same retry rules as the batch
-engine (`nextInviteeStatus`). If the invitee never speaks the result is
-`NO_ANSWER` and it is retried.
+**How a call flows:** the call panel asks `POST /api/voice/session` for the call's
+instructions (campaign prompt + event facts + rules, `src/lib/rsvpAgent.ts`), greeting,
+language and voice. It opens a WebSocket to the voice server, streams 16 kHz mic audio
+(`public/voice/pcm-capture.js`) and plays the 24 kHz voice it gets back
+(`src/lib/useVoiceCall.ts`). When the agent says goodbye, or the call is ended, the
+transcript goes to `/api/invitees/[id]/call`. That route asks the local model for a
+schema-constrained `{outcome, summary, callback_time}`, stores it and applies the same
+retry rules as the batch engine (`nextInviteeStatus`). If the invitee never speaks, the
+result is `NO_ANSWER` and it is retried.
 
-**Limitations:** Ollama runs on your machine, so the deployed Vercel app cannot
-use it (it keeps using the simulator). Chrome's speech recognition sends audio
-to Google's servers, so it needs internet. The mic is off while the agent
-speaks (to avoid echo); use *Interrupt the agent* to cut in. Ending a call takes
-~10-15 s on CPU while the model summarises it.
+**Editable agent instructions.** Each campaign's create/edit form has a **Voice
+agent** section: the agent's instructions (persona, tone, what to ask, how to handle
+odd questions) and a female/male voice. Placeholders such as `{{invitee_name}}` and
+`{{event_name}}` are filled in per call. Leaving the default in place stores nothing, so
+improvements to the default reach that campaign. The event facts, today's date, the
+language style and the call-ending rules are always added, so an edited prompt can't
+break a call. The invitee page links straight to these settings.
+
+**Sounding human.** Hindi and Gujarati are spoken the way people talk on the phone
+(everyday English words, no bookish vocabulary), and verbs match the voice's gender
+("बोल रही हूँ" / "बोल रहा हूँ"). English words inside Hindi are pronounced as English in
+the same voice (Hinglish). Replies are one or two short sentences. The agent never says
+"I don't understand" or asks the invitee to change language.
+
+**Interruptions and language switching** are handled by the voice server: its voice
+activity detection stops the agent the moment the invitee talks, and Whisper decides
+which of the three languages each answer is in. See its README.
+
+**Callbacks.** "I'm driving, call me after 5" makes the agent ask for or confirm the
+time and say goodbye. The end-of-call analysis returns `CALLBACK_REQUESTED` with a
+time in India time, stored as the invitee's `callbackAt` with a new `CALLBACK` status.
+If no usable time was given, it defaults to 2 hours later. The batch engine redials
+callbacks only once they're due, and the campaign stays running until they're done.
+Callbacks show in the dashboard stats, filters, invitee page and CSV export.
+
+**Understanding people.** The default instructions map meaning rather than words
+("can I bring my wife?" means yes plus one guest; "I'll try" means unsure). They answer
+off-topic questions briefly before returning to the invitation, and say honestly that
+it's an AI assistant when asked.
+
+**Limitations:** the voice server and Ollama run on your own machines, so the deployed
+Vercel app can't reach them (it keeps using the simulator). On a laptop CPU, replies take
+20-80 s; real calls need the GPU server. Gujarati is the weakest language (see the voice
+server README).
 
 ## Lite mode (rules + small model, works with or without internet)
 

@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Model } from "vosk-browser";
 import { voiceLines, type Lang } from "@/lib/voiceLines";
+import { buildUtterance, pickVoice } from "@/lib/speech";
 import { advance, initialState, scriptResult, type ScriptState } from "@/lib/offline/script";
 import { parseFaqNotes, type EventFacts } from "@/lib/offline/faq";
 import { understand, warmSmallModel, type UnderstoodBy } from "@/lib/offline/understand";
@@ -61,16 +62,12 @@ function buildFacts(c: OfflineContext): EventFacts {
 const NO_SPEECH_MS = 12000;
 const MAX_SILENT_ROUNDS = 3;
 
-/** Only voices installed on the device (localService) work without internet. */
+/**
+ * Only voices installed on the device (localService) work without internet. Prefers a
+ * female voice because the scripted Hindi/Gujarati lines use the feminine verb forms.
+ */
 function pickLocalVoice(lang: string): SpeechSynthesisVoice | null {
-  if (typeof speechSynthesis === "undefined") return null;
-  const norm = (v: SpeechSynthesisVoice) => v.lang.replace("_", "-").toLowerCase();
-  const want = lang.toLowerCase();
-  const base = want.split("-")[0];
-  const local = speechSynthesis.getVoices().filter((v) => v.localService);
-  return (
-    local.find((v) => norm(v) === want) ?? local.find((v) => norm(v).split("-")[0] === base) ?? null
-  );
+  return pickVoice(lang, { localOnly: true, gender: "female" });
 }
 
 function subscribeVoices(cb: () => void) {
@@ -161,9 +158,7 @@ export function useOfflineCall(
         resolve();
         return;
       }
-      const u = new SpeechSynthesisUtterance(text);
-      u.voice = voice;
-      u.lang = voice.lang;
+      const u = buildUtterance(text, voice, langRef.current);
       let settled = false;
       const done = () => {
         if (settled) return;

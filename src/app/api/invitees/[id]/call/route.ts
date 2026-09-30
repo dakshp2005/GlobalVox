@@ -32,7 +32,9 @@ export async function POST(
     );
   }
 
-  const transcript = (body?.messages ?? []).filter((m) => m.content.trim());
+  const transcript = (body?.messages ?? [])
+    .filter((m) => m.content.trim())
+    .map(({ role, content }) => ({ role, content })); // the model's raw text isn't worth storing
   let result;
   try {
     result = await classifyRsvp(transcript);
@@ -46,7 +48,12 @@ export async function POST(
     summary: result.summary,
     transcript,
     durationSeconds: body?.durationSeconds ?? 0,
+    callbackAt: result.callbackAt,
   });
 
-  return NextResponse.json({ outcome: result.outcome, summary: result.summary });
+  return NextResponse.json({
+    outcome: result.outcome,
+    summary: result.summary,
+    callbackAt: result.callbackAt?.toISOString() ?? null,
+  });
 }

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "create-user": "node scripts/create-user.js",
-    "download-models": "node scripts/download-vosk-models.js"
+    "download-models": "node scripts/download-vosk-models.js",
+    "voice-server": "cd ../voice-server && .venv/Scripts/python -m app.server"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

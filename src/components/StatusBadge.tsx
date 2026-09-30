@@ -2,6 +2,8 @@ const CONFIG: Record<string, { bg: string; text: string; dot: string }> = {
   CONFIRMED: { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500" },
   DECLINED: { bg: "bg-rose-50", text: "text-rose-800", dot: "bg-rose-500" },
   UNDECIDED: { bg: "bg-amber-50", text: "text-amber-800", dot: "bg-amber-500" },
+  CALLBACK: { bg: "bg-violet-50", text: "text-violet-800", dot: "bg-violet-500" },
+  CALLBACK_REQUESTED: { bg: "bg-violet-50", text: "text-violet-800", dot: "bg-violet-500" },
   PENDING: { bg: "bg-slate-100", text: "text-slate-700", dot: "bg-slate-400" },
   IN_PROGRESS: { bg: "bg-sky-50", text: "text-sky-800", dot: "bg-sky-500" },
   FAILED: { bg: "bg-red-50", text: "text-red-800", dot: "bg-red-500" },
@@ -31,7 +33,7 @@ export default function StatusBadge({
       className={`inline-flex items-center gap-1.5 rounded-full font-semibold tracking-wide ${padding} ${cfg.bg} ${cfg.text}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
-      {status.replace("_", " ")}
+      {status.replaceAll("_", " ")}
     </span>
   );
 }

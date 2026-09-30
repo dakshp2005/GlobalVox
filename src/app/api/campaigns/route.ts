@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseInviteeCsv } from "@/lib/csv";
 import { cleanEventDetails } from "@/lib/eventDetails";
+import { cleanAgentSettings } from "@/lib/agentPrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,10 @@ export async function POST(req: NextRequest) {
   if (!details.ok) {
     return NextResponse.json({ error: details.error }, { status: 400 });
   }
+  const agent = cleanAgentSettings(body);
+  if (!agent.ok) {
+    return NextResponse.json({ error: agent.error }, { status: 400 });
+  }
 
   const { rows, parseErrors } = parseInviteeCsv(csvText);
 
@@ -74,6 +79,7 @@ export async function POST(req: NextRequest) {
       eventLocation,
       campaignName,
       ...details.data,
+      ...agent.data,
     },
   });
 

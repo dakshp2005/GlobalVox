@@ -5,6 +5,7 @@ import { Cpu, Server } from "lucide-react";
 import VoiceCall from "@/components/VoiceCall";
 import OfflineCall from "@/components/OfflineCall";
 import type { OfflineContext } from "@/lib/useOfflineCall";
+import type { AgentVoice } from "@/lib/agentPrompt";
 
 type Mode = "ai" | "offline";
 
@@ -17,11 +18,17 @@ const MODES: { id: Mode; label: string; hint: string; icon: typeof Cpu }[] = [
 export default function CallPanel({
   inviteeId,
   inviteeName,
+  campaignId,
+  agentVoice,
+  customPrompt,
   context,
   onFinished,
 }: {
   inviteeId: string;
   inviteeName: string;
+  campaignId: string;
+  agentVoice: AgentVoice;
+  customPrompt: boolean;
   context: OfflineContext;
   onFinished: () => void;
 }) {
@@ -49,7 +56,14 @@ export default function CallPanel({
 
       {mode === "ai" ? (
         <div className="-mt-2">
-          <VoiceCall inviteeId={inviteeId} inviteeName={inviteeName} onFinished={onFinished} />
+          <VoiceCall
+            inviteeId={inviteeId}
+            inviteeName={inviteeName}
+            campaignId={campaignId}
+            agentVoice={agentVoice}
+            customPrompt={customPrompt}
+            onFinished={onFinished}
+          />
         </div>
       ) : (
         <OfflineCall

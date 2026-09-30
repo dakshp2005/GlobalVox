@@ -9,6 +9,8 @@ export interface RecordCallInput {
   durationSeconds: number;
   /** When the call really ended (offline calls sync later). Defaults to now. */
   endedAt?: Date;
+  /** When the invitee asked to be called back (CALLBACK_REQUESTED only). */
+  callbackAt?: Date | null;
 }
 
 /**
@@ -36,6 +38,7 @@ export async function recordCall(
         errorMessage: input.outcome === "NO_ANSWER" ? "No response from invitee" : null,
         transcript: input.transcript as unknown as Prisma.InputJsonValue,
         summary: input.summary,
+        callbackAt: input.callbackAt ?? null,
       },
     }),
     prisma.invitee.update({
@@ -43,12 +46,13 @@ export async function recordCall(
       data: {
         status: nextInviteeStatus(input.outcome, attemptNumber),
         attemptCount: attemptNumber,
+        callbackAt: input.outcome === "CALLBACK_REQUESTED" ? (input.callbackAt ?? null) : null,
       },
     }),
   ]);
 
   const pending = await prisma.invitee.count({
-    where: { campaignId: invitee.campaignId, status: { in: ["PENDING", "IN_PROGRESS"] } },
+    where: { campaignId: invitee.campaignId, status: { in: ["PENDING", "IN_PROGRESS", "CALLBACK"] } },
   });
   if (pending === 0) {
     await prisma.campaign.update({

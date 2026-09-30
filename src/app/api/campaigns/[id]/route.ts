@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cleanEventDetails } from "@/lib/eventDetails";
+import { cleanAgentSettings } from "@/lib/agentPrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -98,10 +99,21 @@ export async function PATCH(
   if (!details.ok) {
     return NextResponse.json({ error: details.error }, { status: 400 });
   }
+  const agent = cleanAgentSettings(body);
+  if (!agent.ok) {
+    return NextResponse.json({ error: agent.error }, { status: 400 });
+  }
 
   const updated = await prisma.campaign.update({
     where: { id },
-    data: { eventName, eventDate: parsedDate, eventLocation, campaignName, ...details.data },
+    data: {
+      eventName,
+      eventDate: parsedDate,
+      eventLocation,
+      campaignName,
+      ...details.data,
+      ...agent.data,
+    },
   });
 
   return NextResponse.json({ campaign: updated });

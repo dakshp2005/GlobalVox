@@ -41,18 +41,24 @@ async function ollamaFetch(path: string, body: unknown, timeoutMs: number, model
   return res;
 }
 
-/** Streams the assistant reply as plain-text chunks. */
+/**
+ * Streams the assistant reply as plain-text chunks. With `prefill`, the reply is started with
+ * that text (sent to the model as the beginning of its answer) and the stream includes it.
+ */
 export async function streamChat(
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  { prefill = "" }: { prefill?: string } = {}
 ): Promise<ReadableStream<Uint8Array>> {
   const res = await ollamaFetch(
     "/api/chat",
     {
       model: OLLAMA_MODEL,
-      messages,
+      messages: prefill ? [...messages, { role: "assistant", content: prefill }] : messages,
       stream: true,
       keep_alive: "30m",
-      options: { ...OPTIONS, num_predict: 90 },
+      // Livelier wording than the default. The agent prompt plus a long call needs more than
+      // 2k tokens of context, and Devanagari/Gujarati text takes several tokens per word.
+      options: { ...OPTIONS, num_ctx: 4096, temperature: 0.6, num_predict: 120 },
     },
     120_000
   );
@@ -64,25 +70,36 @@ export async function streamChat(
   let buffer = "";
 
   return new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (prefill) controller.enqueue(encoder.encode(prefill));
+    },
     async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        controller.close();
-        return;
-      }
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const chunk = JSON.parse(line) as { message?: { content?: string } };
-          if (chunk.message?.content) {
-            controller.enqueue(encoder.encode(chunk.message.content));
-          }
-        } catch {
-          // ignore a malformed partial line
+      // Keep reading until something is enqueued: if pull() returns without enqueuing (a
+      // network chunk holding only part of a line), the stream is never pulled again and
+      // the reply stalls.
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
         }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        let enqueued = false;
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const chunk = JSON.parse(line) as { message?: { content?: string } };
+            if (chunk.message?.content) {
+              controller.enqueue(encoder.encode(chunk.message.content));
+              enqueued = true;
+            }
+          } catch {
+            // ignore a malformed partial line
+          }
+        }
+        if (enqueued) return;
       }
     },
     cancel() {
@@ -106,7 +123,7 @@ export async function chatJson<T>(
       stream: false,
       format: schema,
       keep_alive: "30m",
-      options: { ...OPTIONS, temperature: 0, num_predict: opts.numPredict ?? 200 },
+      options: { ...OPTIONS, num_ctx: 4096, temperature: 0, num_predict: opts.numPredict ?? 200 },
     },
     opts.timeoutMs ?? 120_000,
     model
